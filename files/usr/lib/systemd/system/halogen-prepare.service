@@ -1,6 +1,6 @@
 [Unit]
 Description=Prepare Halogen directories, configuration and API key
-RequiresMountsFor=/var/srv /var/lib/halogen
+RequiresMountsFor=/var/srv/models /var/srv/configs /var/lib/halogen
 After=systemd-sysusers.service systemd-tmpfiles-setup.service
 Before=user@970.service
 

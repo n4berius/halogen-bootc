@@ -72,7 +72,10 @@ sudo dd if=halogen-flash-bootc-v0.18.23-alpha.1-npu.iso of=/dev/sdX bs=4M status
 
 1. Boot from the USB drive and choose **Install halogen-flash-bootc**.
 2. Pick your language.
-3. Under **Installation Destination**, choose the disk. It defaults to LVM with XFS.
+3. Under **Installation Destination**, choose the disk and keep **Automatic** storage. It
+   creates LVM volumes with XFS for `/`, `/var`, `/var/log`, `/var/log/audit`, `/var/home`,
+   `/var/srv/configs` and `/var/srv/models`, which takes the rest of the disk. **Custom** lets
+   you change this, but keep at least 150 GiB for `/var/srv/models`.
 4. Tick **Encrypt my data** if you want LUKS, and set a passphrase.
 5. Create your administrator account, and make sure it has admin rights.
 6. Start the install. It copies the OS from the ISO, so it needs no network here.

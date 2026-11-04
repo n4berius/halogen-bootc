@@ -1,5 +1,5 @@
 [Main]
-Product=halogen-flash-bootc-@EDITION@
+Product=Halogen
 Version=45
 BugURL=https://github.com/n4berius/halogen-bootc/issues
 IsFinal=True
