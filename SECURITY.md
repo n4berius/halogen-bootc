@@ -1,7 +1,7 @@
 # Security
 
-Do not open a public issue for a vulnerability in this project. Contact the maintainer
-privately through GitHub, or use private vulnerability reporting if it is enabled.
+Do not open a public issue for a vulnerability in this project. Use **Report a vulnerability**
+on this repository's Security tab.
 
 Report vulnerabilities in Halogen itself to its maintainers, as its documentation describes.
 

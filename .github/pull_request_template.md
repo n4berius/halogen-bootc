@@ -1,5 +1,7 @@
 ## Summary
 
+<!-- What changed, and why? -->
+
 ## Testing
 - [ ] `tests/run.sh` passes
 - [ ] CI builds both editions

@@ -41,5 +41,16 @@ pushed before the ISO tests run. If a run fails, fix it on `main` and cut the ne
 
 ## Branch protection
 
-GitHub needs Pro or a public repository for this. Once either is true, run
-`scripts/apply-branch-protection.sh`.
+The rules live in `.github/rulesets/`. To apply them, go to **Settings > Rules > Rulesets**,
+choose **New ruleset > Import a ruleset**, pick a file, then choose **Create**. Do this once
+for each file.
+
+| File | What it does |
+|---|---|
+| `protect-main.json` | Changes go through a pull request with passing builds of both editions. No force-pushes or deleting `main` |
+| `protect-release-tags.json` | Release tags cannot be moved or deleted, except by an admin |
+
+The repository owner can still bypass both rules in an emergency. No approval is required,
+because GitHub does not let you approve your own pull request. The ISO install test is not
+a required check, because it only runs when certain files change, but check it before
+merging anything that touches the image or installer.

@@ -198,9 +198,9 @@ you no longer need to roll back to them.
 
 ## Name
 
-halogen-bootc is a private working name. Halogen's trademark policy does not allow "halogen"
-in another machine-learning product or project name without written permission, so ask
-legal@peonist.ai before publishing or distributing it under this name.
+Halogen's trademark policy does not allow "halogen" in another machine-learning product or
+project name without written permission. This name is provisional until that is settled with
+Peonist, LLC, and the project may be renamed.
 
 ## License
 
