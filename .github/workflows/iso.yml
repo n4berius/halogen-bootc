@@ -54,7 +54,7 @@ jobs:
         run: |
           iso="$(sudo find output -name '*.iso' | head -1)"
           tests/iso-install.sh "$iso" "$(scripts/image-ref.sh)" install-test "$HALOGEN_VARIANT"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: boot-test-${{ matrix.variant }}
@@ -64,7 +64,7 @@ jobs:
             install-test/*.log
             install-test/*.txt
           retention-days: 14
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: halogen-flash-bootc-${{ env.HALOGEN_VERSION }}-${{ matrix.variant }}-installer
           path: output/**/*.iso
