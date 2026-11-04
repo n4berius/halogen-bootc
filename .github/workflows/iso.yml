@@ -29,10 +29,12 @@ jobs:
           sudo apt-get update -q
           sudo apt-get install -yq qemu-system-x86 qemu-utils ovmf
           sudo chmod 666 /dev/kvm
+      - name: Read version
+        run: grep '^HALOGEN_VERSION=' versions.env >> "$GITHUB_ENV"
       - name: Build OS image
-        run: sudo scripts/build.sh "ghcr.io/${GITHUB_REPOSITORY,,}:45"
+        run: sudo scripts/build.sh
       - name: Build ISO
-        run: sudo scripts/build-iso.sh "ghcr.io/${GITHUB_REPOSITORY,,}:45"
+        run: sudo scripts/build-iso.sh
       - name: Boot with Secure Boot on
         run: tests/iso-boot.sh "$(sudo find output -name '*.iso' | head -1)" boot-test
       - uses: actions/upload-artifact@v4
@@ -45,7 +47,7 @@ jobs:
           retention-days: 14
       - uses: actions/upload-artifact@v4
         with:
-          name: halogen-bootc-installer-iso
+          name: halogen-flash-bootc-${{ env.HALOGEN_VERSION }}-installer
           path: output/**/*.iso
           compression-level: 0
           retention-days: 30

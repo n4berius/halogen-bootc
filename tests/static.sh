@@ -16,6 +16,8 @@ gtt = next(int(k.split("=")[1]) for k in kargs if k.startswith("amdgpu.gttsize="
 pages = next(int(k.split("=")[1]) for k in kargs if k.startswith("ttm.pages_limit="))
 assert gtt * 1024 == pages * 4, "GTT and TTM limits disagree"
 ks = open("kickstart/strix-halo.ks").read()
+version = re.search(r"^HALOGEN_VERSION=(.+)$", open("versions.env").read(), re.M).group(1)
+assert f"halogen-flash-bootc:{version}" in ks, "kickstart image tag differs from HALOGEN_VERSION"
 assert all(k in ks for k in kargs), "kickstart kernel arguments differ from kargs.d"
 
 class Multi(dict):

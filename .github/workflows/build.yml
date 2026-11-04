@@ -18,10 +18,14 @@ jobs:
       - uses: actions/checkout@v4
       - name: Run checks
         run: tests/run.sh
+      - name: Read version
+        run: grep '^HALOGEN_VERSION=' versions.env >> "$GITHUB_ENV"
       - name: Build
-        run: scripts/build.sh "ghcr.io/${GITHUB_REPOSITORY,,}:45"
+        run: scripts/build.sh "ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/halogen-flash-bootc:$HALOGEN_VERSION"
       - name: Push
         if: github.event_name != 'pull_request'
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u "${{ github.actor }}" --password-stdin
-          podman push "ghcr.io/${GITHUB_REPOSITORY,,}:45"
+          image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/halogen-flash-bootc"
+          podman push "$image:$HALOGEN_VERSION"
+          podman push "$image:$HALOGEN_VERSION" "$image:latest"

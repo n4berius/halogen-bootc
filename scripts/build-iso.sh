@@ -5,8 +5,8 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 # shellcheck source=versions.env
 . ./versions.env
-TARGET="${1:-ghcr.io/n4berius/halogen-bootc:45}"
-INSTALLER=localhost/halogen-bootc-installer:45
+TARGET="${1:-ghcr.io/n4berius/halogen-flash-bootc:$HALOGEN_VERSION}"
+INSTALLER="localhost/halogen-flash-bootc-installer:$HALOGEN_VERSION"
 mkdir -p output
 
 podman image exists "$TARGET" || { echo "build or pull $TARGET first" >&2; exit 1; }
