@@ -18,11 +18,20 @@ qemu-system-x86_64 -enable-kvm -cpu host -m 8G -smp 4 -machine q35,smm=on \
 vm=$!
 trap 'kill "$vm" 2>/dev/null || true' EXIT
 
-for t in 60 180 300 420; do
-  sleep 120
+reached=0
+for t in 60 120 180 240 300 360 420 480; do
+  sleep 60
   printf 'screendump %s/screen-%ss.png -f png\n' "$out" "$t" | python3 -c '
 import socket, sys, time
 s = socket.socket(socket.AF_UNIX); s.connect(sys.argv[1]); s.send(sys.stdin.buffer.read()); time.sleep(2)
 ' "$monitor"
+  text="$(tesseract "$out/screen-${t}s.png" - 2>/dev/null | grep -v '^[[:space:]]*$' | head -25 || true)"
+  echo "=== screen at ${t}s ($(sha256sum "$out/screen-${t}s.png" | cut -c1-12)) ==="
+  echo "$text"
+  if echo "$text" | grep -qiE 'welcome to|installation summary|installation destination'; then reached=1; break; fi
 done
-ls -l "$out"
+
+echo "=== serial log ==="
+tail -n 80 "$out/serial.log" | cut -c1-200
+[ "$reached" = 1 ] || { echo "the installer did not appear" >&2; exit 1; }
+echo "installer reached with Secure Boot on"

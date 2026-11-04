@@ -3,5 +3,5 @@ grub2:
   timeout: 5
   entries:
     - name: "Install halogen-flash-bootc"
-      linux: ${kernelpath} ${root} inst.graphical
+      linux: ${kernelpath} ${root} inst.graphical console=ttyS0 console=tty0
       initrd: ${initrdpath}

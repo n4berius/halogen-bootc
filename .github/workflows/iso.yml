@@ -27,7 +27,7 @@ jobs:
       - name: Install tools
         run: |
           sudo apt-get update -q
-          sudo apt-get install -yq qemu-system-x86 qemu-utils ovmf
+          sudo apt-get install -yq qemu-system-x86 qemu-utils ovmf tesseract-ocr
           sudo chmod 666 /dev/kvm
       - name: Read version
         run: grep '^HALOGEN_VERSION=' versions.env >> "$GITHUB_ENV"
