@@ -148,7 +148,7 @@ upgrades keep your file. New options in a later release appear in
 See [`docs/FLAGS.md`](https://github.com/peonist-ai/halogen-flash-server/blob/main/docs/FLAGS.md)
 for what each option does and how options interact.
 
-To change what is allowed or locked, edit `config/locked.env` or `BLOCKED` in
+To change what is allowed or locked, edit `files/usr/share/halogen/locked.env` or `BLOCKED` in
 `scripts/gen-options.py`, run that script on the new `docs/FLAGS.md`, and rebuild.
 
 ## Operate

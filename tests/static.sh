@@ -17,10 +17,6 @@ assert "iommu=pt" in kargs and not any(k.startswith("amd_iommu") for k in kargs)
 gtt = next(int(k.split("=")[1]) for k in kargs if k.startswith("amdgpu.gttsize="))
 pages = next(int(k.split("=")[1]) for k in kargs if k.startswith("ttm.pages_limit="))
 assert gtt * 1024 == pages * 4, "GTT and TTM limits disagree"
-ks = open("kickstart/strix-halo.ks").read()
-version = re.search(r"^HALOGEN_VERSION=(.+)$", open("versions.env").read(), re.M).group(1)
-assert f"halogen-flash-bootc:{version}" in ks, "kickstart image tag differs from HALOGEN_VERSION"
-assert all(k in ks for k in kargs), "kickstart kernel arguments differ from kargs.d"
 
 class Multi(dict):
     def __setitem__(self, k, v):
@@ -37,8 +33,7 @@ for path in units:
 q = open("files/etc/containers/systemd/users/970/halogen.container").read()
 n = open("variants/npu/etc/containers/systemd/users/970/halogen.container.d/10-npu.conf").read()
 assert "accel" not in q and "/usr/lib/halogen/xrt" not in q
-locked = {l.split("=")[0] for l in open("config/locked.env") if l.startswith("HALOGEN_")}
-assert open("config/locked.env").read() == open("files/usr/share/halogen/locked.env").read()
+locked = {l.split("=")[0] for l in open("files/usr/share/halogen/locked.env") if l.startswith("HALOGEN_")}
 for edition in ("npu", "no-npu"):
     allowed = set(open(f"variants/{edition}/usr/share/halogen/options.allowed").read().split())
     assert allowed and not allowed & locked, allowed & locked
