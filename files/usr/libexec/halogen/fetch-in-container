@@ -19,7 +19,7 @@ if [ -n "$missing" ]; then
   # shellcheck disable=SC2086
   hf download "$WEIGHTS_REPO" $missing --revision "$WEIGHTS_REVISION" --local-dir "$root" || exit 1
 fi
-if [ ! -f $root/tokenizer/tokenizer.json ]; then
+if [ ! -f "$root/tokenizer/tokenizer.json" ]; then
   hf download "$WEIGHTS_REPO" --include 'tokenizer/*' --revision "$WEIGHTS_REVISION" --local-dir "$root" || exit 1
 fi
 
@@ -32,7 +32,7 @@ for id in ${NPU_MODELS//,/ }; do
   ids="$ids $id $(model_key "$id" devices)"
 done
 
-for id in $(printf '%s\n' $ids | awk 'NF && !seen[$0]++'); do
+for id in $(printf '%s\n' "$ids" | tr ' ' '\n' | awk 'NF && !seen[$0]++'); do
   dir="$root/npu/$id"
   repo="$(model_key "$id" repo)"
   revision="$(model_key "$id" revision)"

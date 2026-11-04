@@ -60,7 +60,7 @@ ok "first boot retries, then fetches everything and writes the stamp"
 ok "shared device files of a dependent NPU model are fetched"
 
 : > "$work/podman.log"; "$work/fetch" >/dev/null
-! grep -q ' run ' "$work/podman.log"
+if grep -q ' run ' "$work/podman.log"; then echo "second boot ran a container" >&2; exit 1; fi
 ok "second boot starts nothing and downloads nothing"
 
 echo 'HALOGEN_NPU_MODELS=embed' > "$work/config.env"
