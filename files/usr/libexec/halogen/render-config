@@ -1,0 +1,47 @@
+#!/bin/bash
+# Build the settings Halogen receives from /srv/configs/halogen.env. Only options this
+# image allows pass through, so a typo or a locked setting cannot reach the server.
+# Prints the path of the result. With --show, prints its contents instead.
+set -uo pipefail
+config="${HALOGEN_CONFIG_FILE:-/srv/configs/halogen.env}"
+allowed="${HALOGEN_ALLOWED_FILE:-/usr/share/halogen/options.allowed}"
+runtime="${XDG_RUNTIME_DIR:-/run/user/970}/halogen"
+output="$runtime/effective.env"
+mkdir -p "$runtime" || exit 1
+declare -A values=()
+
+ignore() { echo "halogen-config: ignored $1: $2" >&2; }
+
+if [ -r "$config" ]; then
+  while IFS= read -r line || [ -n "$line" ]; do
+    line="${line#"${line%%[![:space:]]*}"}"
+    case "$line" in
+      ''|'#'*) continue ;;
+      *=*) ;;
+      *) ignore "'$line'" "it is not KEY=VALUE"; continue ;;
+    esac
+    key="${line%%=*}"
+    value="${line#*=}"
+    if ! grep -qxF -- "$key" "$allowed"; then
+      ignore "$key" "not an option this system allows"
+      continue
+    fi
+    case "$value" in \"*\"|\'*\') value="${value:1:${#value}-2}" ;; esac
+    if [ "$key" = HALOGEN_VISION_TOWER ] && [ -n "$value" ] && [ "$value" != 1 ]; then
+      ignore "$key" "the only supported value is 1"
+      continue
+    fi
+    values["$key"]="$value"
+  done < "$config"
+else
+  echo "halogen-config: cannot read $config, so Halogen uses its defaults" >&2
+fi
+
+tmp="$output.new"
+: > "$tmp" || exit 1
+for key in "${!values[@]}"; do
+  printf '%s=%s\n' "$key" "${values[$key]}" >> "$tmp"
+done
+sort -o "$tmp" "$tmp"
+mv "$tmp" "$output"
+if [ "${1:-}" = --show ]; then cat "$output"; else echo "$output"; fi

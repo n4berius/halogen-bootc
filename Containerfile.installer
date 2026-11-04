@@ -3,6 +3,7 @@
 ARG FEDORA_BOOTC_IMAGE
 FROM ${FEDORA_BOOTC_IMAGE}
 ARG TARGET_IMAGE
+ARG HALOGEN_VARIANT
 
 RUN dnf -y install \
       anaconda anaconda-install-img-deps anaconda-dracut \
@@ -14,6 +15,7 @@ RUN dnf -y install \
 
 RUN mkdir -p /boot/efi && cp -ra /usr/lib/efi/*/*/EFI /boot/efi
 
+COPY LICENSE THIRD-PARTY-NOTICES.md /usr/share/licenses/halogen-bootc/
 COPY installer/buildstamp /.buildstamp
 COPY installer/iso.yaml /usr/lib/image-builder/bootc/iso.yaml
 COPY installer/anaconda/10-halogen.conf /etc/anaconda/conf.d/10-halogen.conf
@@ -22,7 +24,8 @@ COPY installer/anaconda-shell.conf /usr/lib/systemd/logind.conf.d/anaconda-shell
 COPY installer/allowroot.conf /etc/systemd/user/pipewire.service.d/allowroot.conf
 COPY installer/allowroot.conf /etc/systemd/user/pipewire.socket.d/allowroot.conf
 
-RUN sed -i "s|@TARGET_IMAGE@|${TARGET_IMAGE}|g" /usr/share/anaconda/interactive-defaults.ks && \
+RUN sed -i "s|@EDITION@|${HALOGEN_VARIANT}|g" /.buildstamp /usr/lib/image-builder/bootc/iso.yaml && \
+    sed -i "s|@TARGET_IMAGE@|${TARGET_IMAGE}|g" /usr/share/anaconda/interactive-defaults.ks && \
     ! grep -q '@TARGET_IMAGE@' /usr/share/anaconda/interactive-defaults.ks
 
 # What lorax normally does so Anaconda can run. Based on image-builder's example.

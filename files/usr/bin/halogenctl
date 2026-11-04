@@ -12,6 +12,12 @@ case "${1:-status}" in
     # Runs under the service manager, so it sees the service's real limits.
     systemd-run --machine=halogen@.host --user --pipe --wait --quiet /usr/libexec/halogen/preflight
     ;;
+  config)
+    # Shows what Halogen receives. Ignored lines are explained above the list.
+    systemd-run --machine=halogen@.host --user --pipe --wait --quiet /usr/libexec/halogen/render-config --show
+    echo "--- locked ---"
+    grep -v '^#' /usr/share/halogen/locked.env
+    ;;
   api-key) cat /srv/configs/api-key; echo ;;
-  *) echo "usage: halogenctl status|start|stop|restart|logs|fetch-logs|doctor|api-key" >&2; exit 2 ;;
+  *) echo "usage: halogenctl status|start|stop|restart|logs|fetch-logs|doctor|config|api-key" >&2; exit 2 ;;
 esac

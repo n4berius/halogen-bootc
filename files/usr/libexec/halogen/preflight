@@ -2,7 +2,7 @@
 # Checks the host before Halogen starts. Also run by: halogenctl doctor
 set -uo pipefail
 sysfs="${HALOGEN_SYSFS:-/sys}"
-config="${HALOGEN_CONFIG_FILE:-/srv/configs/halogen.env}"
+effective="${HALOGEN_EFFECTIVE_FILE:-${XDG_RUNTIME_DIR:-/run/user/970}/halogen/effective.env}"
 clock="${HALOGEN_CLOCK:-/usr/libexec/halogen/halogen-fabric-clock}"
 cmdline="${HALOGEN_CMDLINE:-/proc/cmdline}"
 meminfo="${HALOGEN_MEMINFO:-/proc/meminfo}"
@@ -12,8 +12,7 @@ failed=0
 fail() { echo "preflight: FAIL: $*" >&2; failed=1; }
 warn() { echo "preflight: warning: $*" >&2; }
 
-# shellcheck disable=SC1090
-[ -r "$config" ] && . "$config"
+npu_models="$(sed -n 's/^HALOGEN_NPU_MODELS=//p' "$effective" 2>/dev/null | tail -n 1)"
 
 if [ ! -e "$dev/kfd" ]; then
   fail "$dev/kfd is missing, so the GPU driver is not ready"
@@ -25,7 +24,7 @@ mem_gib="$(awk '$1 == "MemTotal:" { printf "%d", $2 / 1048576 }' "$meminfo")"
 [ "${mem_gib:-0}" -ge 100 ] \
   || fail "the OS sees ${mem_gib:-0} GiB. Set the BIOS UMA frame buffer to its explicit minimum, not Auto"
 
-if [ -n "${HALOGEN_NPU_MODELS:-}" ]; then
+if [ -n "$npu_models" ]; then
   if [ ! -e "$dev/accel/accel0" ]; then
     fail "$dev/accel/accel0 is missing. Check the IOMMU, amdxdna and NPU firmware"
   elif [ ! -r "$dev/accel/accel0" ] || [ ! -w "$dev/accel/accel0" ]; then

@@ -22,6 +22,7 @@ RUN set -eu; \
     (cd /debs && sha256sum ./*.deb) > /out/debs.sha256
 
 FROM ${FEDORA_BOOTC_IMAGE}
+ARG HALOGEN_VARIANT
 ARG HALOGEN_IMAGE
 ARG HALOGEN_VERSION
 ARG HALOGEN_SOURCE_COMMIT
@@ -37,6 +38,8 @@ RUN dnf -y --setopt=install_weak_deps=False install \
     ls -d /usr/lib/firmware/amdgpu /usr/lib/firmware/amdnpu
 
 COPY files/ /
+COPY variants/${HALOGEN_VARIANT}/ /
+COPY LICENSE THIRD-PARTY-NOTICES.md /usr/share/licenses/halogen-bootc/
 COPY --from=xrt /out/lib/ /usr/lib/halogen/xrt/
 COPY --from=xrt /out/licenses/ /usr/share/licenses/halogen-xrt/
 COPY --from=xrt /out/VERSION /usr/lib/halogen/xrt/VERSION
@@ -55,17 +58,23 @@ RUN set -eu; \
 
 RUN set -eu; \
     chmod 0755 /usr/bin/halogenctl /usr/bin/halogen-enroll-tpm /usr/libexec/halogen/*; \
-    sed -i -e "s|@HALOGEN_IMAGE@|${HALOGEN_IMAGE}|g" -e "s|@HALOGEN_VERSION@|${HALOGEN_VERSION}|g" \
-      /etc/containers/systemd/users/970/halogen.container; \
-    if grep -q '@HALOGEN_' /etc/containers/systemd/users/970/halogen.container; then exit 1; fi; \
+    find /etc/containers/systemd/users/970 -type f -exec sed -i \
+      -e "s|@HALOGEN_IMAGE@|${HALOGEN_IMAGE}|g" -e "s|@HALOGEN_VERSION@|${HALOGEN_VERSION}|g" {} +; \
+    if grep -rq '@HALOGEN_' /etc/containers/systemd/users/970; then exit 1; fi; \
     { echo "HALOGEN_IMAGE=${HALOGEN_IMAGE}"; \
       echo "HALOGEN_VERSION=${HALOGEN_VERSION}"; \
+      echo "HALOGEN_VARIANT=${HALOGEN_VARIANT}"; \
       echo "HALOGEN_WEIGHTS_REPO=${HALOGEN_WEIGHTS_REPO}"; \
       echo "HALOGEN_WEIGHTS_REVISION=${HALOGEN_WEIGHTS_REVISION}"; } > /usr/share/halogen/release.env; \
     echo 'halogen:524288:65536' >> /etc/subuid; \
     echo 'halogen:524288:65536' >> /etc/subgid; \
     firewall-offline-cmd --add-service=halogen; \
-    systemctl enable firewalld.service halogen-prepare.service halogen-fabric-clock.service; \
+    systemctl enable firewalld.service halogen-prepare.service; \
+    if [ "$HALOGEN_VARIANT" = npu ]; then \
+      systemctl enable halogen-fabric-clock.service; \
+    else \
+      rm -rf /usr/lib/halogen/xrt /usr/share/licenses/halogen-xrt /usr/lib/systemd/system/halogen-fabric-clock.service /usr/libexec/halogen/halogen-fabric-clock; \
+    fi; \
     systemctl mask bootc-fetch-apply-updates.timer
 
 # The initramfs needs TPM2 support for LUKS unlock.

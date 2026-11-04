@@ -44,6 +44,8 @@ HALOGEN_WEIGHTS_REPO=r
 HALOGEN_WEIGHTS_REVISION=main
 S
 echo 'HALOGEN_NPU_MODELS=embed,rerank' > "$work/config.env"
+echo HALOGEN_NPU_MODELS > "$work/allowed"
+export XDG_RUNTIME_DIR="$work/run" HALOGEN_ALLOWED_FILE="$work/allowed" HALOGEN_RENDER="$repo/files/usr/libexec/halogen/render-config"
 export HALOGEN_RELEASE_FILE="$work/release.env" HALOGEN_CONFIG_FILE="$work/config.env" HALOGEN_MODELS_DIR="$work/models" \
   HALOGEN_FETCH_HELPER="$HELPER_SRC" HALOGEN_MODELS_NEEDED_GIB=0 HALOGEN_RETRY_MAX_S=0
 sleep() { :; }; export -f sleep
