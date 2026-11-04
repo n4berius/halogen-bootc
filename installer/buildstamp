@@ -1,0 +1,6 @@
+[Main]
+Product=halogen-flash-bootc
+Version=45
+BugURL=https://github.com/n4berius/halogen-bootc/issues
+IsFinal=True
+UUID=202611040000.x86_64

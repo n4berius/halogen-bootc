@@ -70,6 +70,7 @@ RUN set -eu; \
 
 # The initramfs needs TPM2 support for LUKS unlock.
 RUN set -eu; \
+    mkdir -p "$(realpath /root)"; \
     kver="$(ls /usr/lib/modules)"; \
     env DRACUT_NO_XATTR=1 dracut -f "/usr/lib/modules/${kver}/initramfs.img" "$kver"
 

@@ -15,14 +15,22 @@ warn() { echo "preflight: warning: $*" >&2; }
 # shellcheck disable=SC1090
 [ -r "$config" ] && . "$config"
 
-[ -e "$dev/kfd" ] || fail "$dev/kfd is missing, so the GPU driver is not ready"
+if [ ! -e "$dev/kfd" ]; then
+  fail "$dev/kfd is missing, so the GPU driver is not ready"
+elif [ ! -r "$dev/kfd" ] || [ ! -w "$dev/kfd" ]; then
+  fail "this service cannot open $dev/kfd. Check its group with ls -l"
+fi
 
 mem_gib="$(awk '$1 == "MemTotal:" { printf "%d", $2 / 1048576 }' "$meminfo")"
 [ "${mem_gib:-0}" -ge 100 ] \
   || fail "the OS sees ${mem_gib:-0} GiB. Set the BIOS UMA frame buffer to its explicit minimum, not Auto"
 
 if [ -n "${HALOGEN_NPU_MODELS:-}" ]; then
-  [ -e "$dev/accel/accel0" ] || fail "$dev/accel/accel0 is missing. Check the IOMMU, amdxdna and NPU firmware"
+  if [ ! -e "$dev/accel/accel0" ]; then
+    fail "$dev/accel/accel0 is missing. Check the IOMMU, amdxdna and NPU firmware"
+  elif [ ! -r "$dev/accel/accel0" ] || [ ! -w "$dev/accel/accel0" ]; then
+    fail "this service cannot open $dev/accel/accel0. Check its group with ls -l"
+  fi
   grep -qw 'amd_iommu=off' "$cmdline" && fail "amd_iommu=off disables the NPU"
   "$clock" status >/dev/null 2>&1 \
     || fail "the fabric clock is not held. Check: systemctl status halogen-fabric-clock"

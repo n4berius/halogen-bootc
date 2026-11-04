@@ -1,0 +1,60 @@
+name: Build USB installer
+on:
+  push:
+    branches: [main]
+    paths: &paths
+      - Containerfile*
+      - installer/**
+      - files/**
+      - scripts/**
+      - tests/iso-*.sh
+      - tests/vm-login.py
+      - .github/workflows/iso.yml
+  pull_request:
+    paths: *paths
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  iso:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - name: Free disk space
+        run: sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc
+      - name: Install tools
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -yq qemu-system-x86 qemu-utils ovmf tesseract-ocr genisoimage
+          sudo chmod 666 /dev/kvm
+      - name: Read version
+        run: grep '^HALOGEN_VERSION=' versions.env >> "$GITHUB_ENV"
+      - name: Build OS image
+        run: sudo scripts/build.sh
+      - name: Build ISO
+        run: sudo scripts/build-iso.sh
+      - name: Boot with Secure Boot on
+        run: tests/iso-boot.sh "$(sudo find output -name '*.iso' | head -1)" boot-test
+      - name: Install and boot with Secure Boot on
+        run: |
+          iso="$(sudo find output -name '*.iso' | head -1)"
+          tests/iso-install.sh "$iso" "ghcr.io/n4berius/halogen-flash-bootc:$HALOGEN_VERSION" install-test
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: boot-test
+          path: |
+            boot-test/*.png
+            boot-test/serial.log
+            install-test/*.log
+            install-test/*.txt
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        with:
+          name: halogen-flash-bootc-${{ env.HALOGEN_VERSION }}-installer
+          path: output/**/*.iso
+          compression-level: 0
+          retention-days: 30

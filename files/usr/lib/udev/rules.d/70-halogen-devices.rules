@@ -1,0 +1,4 @@
+# This machine serves Halogen, so its rootless service owns the GPU compute and NPU nodes.
+SUBSYSTEM=="kfd", KERNEL=="kfd", GROUP="halogen", MODE="0660"
+SUBSYSTEM=="drm", KERNEL=="renderD*", GROUP="halogen", MODE="0660"
+SUBSYSTEM=="accel", KERNEL=="accel[0-9]*", GROUP="halogen", MODE="0660", SECLABEL{selinux}="system_u:object_r:dri_device_t:s0"

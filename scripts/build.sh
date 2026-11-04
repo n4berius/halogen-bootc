@@ -1,10 +1,11 @@
 #!/bin/bash
-# Build the OS image. Usage: scripts/build.sh [image-reference]
+# Build the OS image, tagged with its Halogen version.
+# Usage: scripts/build.sh [image-reference]
 set -euo pipefail
 cd "$(dirname "$0")/.."
 # shellcheck source=versions.env
 . ./versions.env
-TAG="${1:-localhost/halogen-bootc:45}"
+TAG="${1:-ghcr.io/n4berius/halogen-flash-bootc:$HALOGEN_VERSION}"
 SOURCE=ghcr.io/peonist-ai/halogen-flash-server
 
 if [ -z "$HALOGEN_DIGEST" ]; then
@@ -17,6 +18,8 @@ case "$HALOGEN_DIGEST" in
 esac
 
 podman build --pull=newer -t "$TAG" \
+  --label "org.opencontainers.image.source=https://github.com/n4berius/halogen-bootc" \
+  --label "org.opencontainers.image.version=$HALOGEN_VERSION" \
   --build-arg "FEDORA_BOOTC_IMAGE=$FEDORA_BOOTC_IMAGE" \
   --build-arg "DEBIAN_IMAGE=$DEBIAN_IMAGE" \
   --build-arg "XRT_MIN_VERSION=$XRT_MIN_VERSION" \
