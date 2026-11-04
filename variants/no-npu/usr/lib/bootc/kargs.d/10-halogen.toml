@@ -1,4 +1,4 @@
 # For a machine with 128 GB installed. This edition has no NPU, so it can turn the
 # IOMMU off for Halogen's measured 13-16% prefill gain.
-kargs = ["amdgpu.gttsize=126976", "ttm.pages_limit=32505856", "amd_iommu=off"]
+kargs = ["amdgpu.gttsize=126976", "ttm.pages_limit=32505856", "amd_iommu=off", "rd.luks.options=tpm2-device=auto"]
 match-architectures = ["x86_64"]

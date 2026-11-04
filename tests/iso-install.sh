@@ -46,4 +46,6 @@ cat "$out/report.txt"
 grep -q 'amdgpu.gttsize=126976' "$out/report.txt"
 if [ "$variant" = npu ]; then grep -q 'iommu=pt' "$out/report.txt"; else grep -q 'amd_iommu=off' "$out/report.txt"; fi
 grep -qi 'secure boot.*enabled\|Secure Boot: enabled' "$out/report.txt"
+grep -q 'Linger=yes' "$out/report.txt"
+grep -q 'halogen-fetch:' "$out/report.txt"
 echo "installed system verified"
