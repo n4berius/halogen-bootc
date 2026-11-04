@@ -1,0 +1,51 @@
+name: Build USB installer
+on:
+  push:
+    branches: [main]
+    paths: &paths
+      - Containerfile*
+      - installer/**
+      - files/**
+      - scripts/**
+      - tests/iso-boot.sh
+      - .github/workflows/iso.yml
+  pull_request:
+    paths: *paths
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  iso:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - name: Free disk space
+        run: sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc
+      - name: Install tools
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -yq qemu-system-x86 qemu-utils ovmf
+          sudo chmod 666 /dev/kvm
+      - name: Build OS image
+        run: sudo scripts/build.sh "ghcr.io/${GITHUB_REPOSITORY,,}:45"
+      - name: Build ISO
+        run: sudo scripts/build-iso.sh "ghcr.io/${GITHUB_REPOSITORY,,}:45"
+      - name: Boot with Secure Boot on
+        run: tests/iso-boot.sh "$(sudo find output -name '*.iso' | head -1)" boot-test
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: boot-test
+          path: |
+            boot-test/*.png
+            boot-test/serial.log
+          retention-days: 14
+      - uses: actions/upload-artifact@v4
+        with:
+          name: halogen-bootc-installer-iso
+          path: output/**/*.iso
+          compression-level: 0
+          retention-days: 30

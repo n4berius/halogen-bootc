@@ -1,0 +1,7 @@
+label: "halogen-bootc-45"
+grub2:
+  timeout: 5
+  entries:
+    - name: "Install halogen-bootc"
+      linux: ${kernelpath} ${root} inst.graphical
+      initrd: ${initrdpath}
