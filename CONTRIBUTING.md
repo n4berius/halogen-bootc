@@ -5,8 +5,10 @@
 3. Keep Halogen unmodified. This project configures and deploys it.
 4. Say in the pull request whether you tested on real Strix Halo hardware.
 
-Changes to `Containerfile*`, `files/`, `variants/`, `installer/` or `scripts/` also run the
-full ISO install test in CI, which takes about 40 minutes per edition.
+Docs-only pull requests skip the image build. Changes to `Containerfile*`, `files/`,
+`variants/`, `installer/`, `config/` or `scripts/` also run the full ISO install test in CI,
+which takes about 40 minutes per edition. A new push cancels older runs on the same pull
+request.
 
 Most of this project is AI-written, so review every change as you would a stranger's.
 Use the issue forms for bugs, ideas and hardware test reports. Hardware reports are especially
