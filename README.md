@@ -92,14 +92,28 @@ download the models.
 `amd_iommu=off` turns off DMA translation machine-wide. That suits a dedicated server,
 but it is a real security trade-off. To keep the IOMMU on, change the edition's `kargs.d` file.
 
+## Releases
+
+Releases come in alpha, beta, RC and stable channels, published as git tags and matching
+image tags. [RELEASING.md](RELEASING.md) defines them.
+
+| Use | Image tag |
+|---|---|
+| Recommended | `stable`, or a version such as `0.18.23` |
+| Testing a release | `beta`, `rc`, or an exact tag such as `0.18.23-beta.1` |
+| Earliest testing | `alpha` |
+| Newest `main` build | `edge` |
+
+Add `-no-npu` for the edition without the NPU.
+
 ## Build
 
 Images are tagged with the Halogen version they carry, for example
-`ghcr.io/n4berius/halogen-flash-bootc:0.18.23`. `latest` follows the newest build.
+`ghcr.io/n4berius/halogen-flash-bootc:0.18.23`.
 
-Pushing to `main` builds and pushes the image, and a weekly build refreshes the same tag
-with Fedora updates. Changes to the image or installer also build the USB installer ISO,
-which appears as a download on the workflow run.
+Pushing to `main` publishes the `edge` images, and tags publish releases. Each Monday, the
+newest stable release is rebuilt with Fedora updates. Changes to the image or installer also
+run the full ISO install test.
 
 To build locally, you need Podman and Skopeo:
 
@@ -169,9 +183,8 @@ sudo bootc switch ghcr.io/n4berius/halogen-flash-bootc:0.18.24
 sudo systemctl reboot
 ```
 
-To publish a new version, update `HALOGEN_VERSION`, `HALOGEN_SOURCE_COMMIT` and the three
-hashes in `versions.env`, plus the tag in the kickstart. A new version downloads its NPU
-files, about 15 GB, on its first boot. Remove old `/srv/models/npu/<version>` folders once
+To publish a new version, follow [RELEASING.md](RELEASING.md). A new version downloads its
+NPU files, about 15 GB, on its first boot. Remove old `/srv/models/npu/<version>` folders once
 you no longer need to roll back to them.
 
 ## Choices worth knowing

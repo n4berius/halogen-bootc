@@ -51,4 +51,4 @@ for lib in ("libxrt_coreutil", "libxrt_core", "libxrt_driver_xdna"):
 xml.dom.minidom.parse("files/usr/lib/firewalld/services/halogen.xml")
 print("static checks ok")
 P
-python3 -c "import yaml; yaml.safe_load(open('.github/workflows/build.yml'))"
+python3 -c "import glob, yaml; [yaml.safe_load(open(f)) for f in glob.glob('.github/**/*.yml', recursive=True)]"

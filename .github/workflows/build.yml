@@ -3,8 +3,6 @@ on:
   push:
     branches: [main]
   pull_request:
-  schedule:
-    - cron: "17 6 * * 1"
   workflow_dispatch:
 
 permissions:
@@ -30,8 +28,4 @@ jobs:
         if: github.event_name != 'pull_request'
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u "${{ github.actor }}" --password-stdin
-          image="$(scripts/image-ref.sh)"
-          latest="${image%:*}:latest"
-          [ "$HALOGEN_VARIANT" = npu ] || latest="$latest-no-npu"
-          podman push "$image"
-          podman push "$image" "$latest"
+          podman push "$(scripts/image-ref.sh)" "$(scripts/image-ref.sh | sed 's/:[^:]*$//'):edge$([ "$HALOGEN_VARIANT" = npu ] || echo -no-npu)"
