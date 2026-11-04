@@ -8,8 +8,8 @@ from USB, boots with Secure Boot on, and runs
 release, with or without its NPU models. The host is already configured, and there is no
 desktop after install.
 
-> **Status:** the NPU edition builds, installs and boots in a virtual machine with Secure Boot
-> on. It has not run on real hardware, so the GPU, NPU, model download, TPM enrollment and
+> **Status:** both editions build, install and boot in a virtual machine with Secure Boot on.
+> Neither has run on real hardware, so the GPU, NPU, model download, TPM enrollment and
 > Halogen itself are still untested on a Strix Halo.
 
 This is an independent project. It is not made, endorsed or supported by Peonist, LLC.
