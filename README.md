@@ -2,12 +2,63 @@
 
 Purpose-built operating system that runs halogen.
 
-It is an image-based Fedora 45 appliance for one 128 GB AMD Strix Halo machine. It runs
-[Halogen](https://github.com/peonist-ai/halogen-flash-server) with its NPU models,
-pinned to one release, with the host already configured.
+It is an image-based Fedora 45 appliance for one 128 GB AMD Strix Halo machine. It installs
+from USB, boots with Secure Boot on, and runs
+[halogen-flash-server](https://github.com/peonist-ai/halogen-flash-server) pinned to one
+release, with or without its NPU models. The host is already configured, and there is no
+desktop after install.
 
-> **Status:** the image builds in CI, but it has not run on real hardware. The installer,
-> Quadlet, SELinux rules and NPU path still need a first run on the machine.
+> **Status:** both editions build, install and boot in a virtual machine with Secure Boot on.
+> Neither has run on real hardware yet, so the GPU, NPU, model download, TPM enrollment and
+> Halogen itself are still untested on a Strix Halo.
+
+This is an independent project. It is not made, endorsed or supported by Peonist, LLC.
+For problems with this OS, use this repository's issues. Report problems in Halogen itself
+to [Halogen](https://github.com/peonist-ai/halogen-flash-server/issues) only if you can
+reproduce them on a supported host.
+
+## AI usage disclaimer
+
+The code, tests, CI workflows and documentation in this repository were written entirely by
+[Claude](https://claude.ai), Anthropic's AI model, working from direction given by the
+repository owner, [n4berius](https://github.com/n4berius). n4berius reviewed and merged the
+code. AI-written software can contain mistakes, so read it and test it on your own hardware
+before relying on it. This software comes with no warranty, as stated in the
+[license](LICENSE).
+
+## How it follows Halogen
+
+This project tracks the official
+[halogen-flash-server](https://github.com/peonist-ai/halogen-flash-server) and does not fork
+or change it.
+
+- Each image tag names the Halogen release it carries, such as `0.18.23`.
+- `versions.env` pins that release, the commit it matches, and hashes for the files taken
+  from it. The build then pins the container by digest.
+- The container runs unmodified, pulled from Halogen's own registry on first boot.
+- The list of allowed options is generated from Halogen's `docs/FLAGS.md`.
+
+New Halogen releases are not picked up automatically. Each one is a reviewed change to
+`versions.env`, so this project can lag behind upstream.
+
+## Official documentation
+
+Halogen's own documentation is the reference for what each setting does and how the server
+behaves. This README covers only what this OS adds or fixes in place. If they disagree on
+how Halogen works, follow Halogen's documentation for your version.
+
+| Topic | Official documentation |
+|---|---|
+| Every setting | [`docs/FLAGS.md`](https://github.com/peonist-ai/halogen-flash-server/blob/main/docs/FLAGS.md) |
+| Configuration and memory | [`docs/configuration.md`](https://github.com/peonist-ai/halogen-flash-server/blob/main/docs/configuration.md) |
+| NPU models and host needs | [`docs/NPU.md`](https://github.com/peonist-ai/halogen-flash-server/blob/main/docs/NPU.md) |
+| API | [`docs/api.md`](https://github.com/peonist-ai/halogen-flash-server/blob/main/docs/api.md) |
+| Host setup | [`docs/host-setup.md`](https://github.com/peonist-ai/halogen-flash-server/blob/main/docs/host-setup.md) |
+| Troubleshooting | [`docs/troubleshooting.md`](https://github.com/peonist-ai/halogen-flash-server/blob/main/docs/troubleshooting.md) |
+| Changes between releases | [`CHANGELOG.md`](https://github.com/peonist-ai/halogen-flash-server/blob/main/CHANGELOG.md) |
+
+Those links follow Halogen's latest code, which may be newer than the version pinned here.
+For an exact match, view the same file at the commit in `versions.env`.
 
 Base image: Fedora's official `quay.io/fedora/fedora-bootc:45`. There is no separate
 image-based Fedora Server edition, so this adds only what the appliance needs.
@@ -113,6 +164,9 @@ script. Locked values live in `/usr/share/halogen/locked.env`, on the read-only 
 upgrades keep your file. New options in a later release appear in
 `/usr/share/halogen/halogen.env.default`.
 
+See [`docs/FLAGS.md`](https://github.com/peonist-ai/halogen-flash-server/blob/main/docs/FLAGS.md)
+for what each option does and how options interact.
+
 To change what is allowed or locked, edit `config/locked.env` or `BLOCKED` in
 `scripts/gen-options.py`, run that script on the new `docs/FLAGS.md`, and rebuild.
 
@@ -182,7 +236,14 @@ Run these on the hardware, and treat a failure as a repo bug:
 
 ## Name
 
-halogen-bootc is a private working name. Halogen's trademark policy does not allow
-"halogen" in another machine-learning product or project name without written permission,
-so ask legal@peonist.ai before publishing or distributing it under this name. This project
-runs halogen and is not affiliated with or endorsed by Peonist.
+halogen-bootc is a private working name. Halogen's trademark policy does not allow "halogen"
+in another machine-learning product or project name without written permission, so ask
+legal@peonist.ai before publishing or distributing it under this name.
+
+## License
+
+This project's own files are under the [MIT license](LICENSE). That license does not cover
+Halogen, model weights, or the other components in the images. They keep their own terms,
+listed in [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md). Halogen's
+[EULA](https://github.com/peonist-ai/halogen-flash-server/blob/main/LICENSE.md) applies to
+Halogen.
