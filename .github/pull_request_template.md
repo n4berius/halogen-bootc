@@ -8,4 +8,4 @@
 - [ ] Tested on real hardware, or noted here that it was not
 
 ## Halogen version change
-- [ ] Not a version change, or `versions.env`, the kickstart and the option lists are updated
+- [ ] Not a version change, or `versions.env` and the option lists are updated

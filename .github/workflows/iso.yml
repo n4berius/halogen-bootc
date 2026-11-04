@@ -8,7 +8,6 @@ on:
       - files/**
       - scripts/**
       - variants/**
-      - config/**
       - tests/iso-*.sh
       - tests/vm-login.py
       - .github/workflows/iso.yml

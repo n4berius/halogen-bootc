@@ -136,12 +136,6 @@ sudo systemctl reboot
 Keep the passphrase as your recovery key. TPM unlock uses PCR 7, so changing Secure Boot
 settings means entering the passphrase and running `halogen-enroll-tpm` again.
 
-## Unattended install
-
-`kickstart/strix-halo.ks` installs the NPU edition without prompts from the Fedora netinstall
-ISO. **It erases `nvme0n1`.** Replace the SSH key first, and make sure the installer can read
-the image, because Anaconda's `bootc` method cannot use a private registry.
-
 ## If something goes wrong
 
 | Symptom | Check |
