@@ -39,13 +39,17 @@ else:
 
 typed("root\n"); time.sleep(3)
 typed("halogentest\n"); time.sleep(5)
+# The user services start after the fabric clock, which waits about a minute for a GPU
+# that a VM does not have. Give them time before reporting.
+typed("timeout 180 sh -c 'until journalctl -o cat _SYSTEMD_USER_UNIT=halogen-fetch.service | grep -q halogen-fetch; do sleep 5; done'\n")
+time.sleep(5)
 typed("{ echo RESULT-START; cat /proc/cmdline; dmesg | grep -i secure; bootctl status | grep -i secure; "
       "bootc status | head -12; udevadm verify /usr/lib/udev/rules.d/70-halogen-devices.rules; "
       "sestatus | head -3; id halogen; loginctl show-user halogen -p Linger; "
-      "systemctl is-active user@970.service; journalctl --no-pager -n 8 -o cat _SYSTEMD_USER_UNIT=halogen-fetch.service; systemctl --failed --no-legend --no-pager; "
+      "systemctl status user@970.service --no-pager | head -4; journalctl --no-pager -n 8 -o cat _SYSTEMD_USER_UNIT=halogen-fetch.service; systemctl --failed --no-legend --no-pager; "
       "systemctl is-active firewalld halogen-prepare; echo RESULT-END; } > /dev/ttyS0 2>&1\n")
 
-deadline = time.time() + 120
+deadline = time.time() + 300
 while time.time() < deadline:
     time.sleep(5)
     log = serial.read_text(errors="replace")
