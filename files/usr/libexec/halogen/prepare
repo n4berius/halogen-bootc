@@ -1,0 +1,25 @@
+#!/bin/bash
+# Runs as root on every boot. Safe to repeat.
+set -euo pipefail
+models=/var/srv/models
+configs=/var/srv/configs
+
+install -d -o halogen -g halogen -m 0750 "$models" "$configs" /var/lib/halogen
+
+if [ ! -e "$configs/halogen.env" ]; then
+  install -o halogen -g halogen -m 0640 /usr/share/halogen/halogen.env.default "$configs/halogen.env"
+fi
+if [ ! -e "$configs/api-key" ]; then
+  umask 077
+  head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n' > "$configs/api-key"
+  chown halogen:halogen "$configs/api-key"
+fi
+
+if command -v selinuxenabled >/dev/null && selinuxenabled; then
+  for dir in "$models" "$configs"; do
+    case "$(stat -c %C "$dir")" in
+      *:container_file_t:*) ;;
+      *) chcon -R -t container_file_t "$dir" ;;
+    esac
+  done
+fi

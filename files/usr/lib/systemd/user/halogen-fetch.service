@@ -1,0 +1,9 @@
+[Unit]
+Description=Fetch the Halogen image and models when they are missing
+ConditionUser=halogen
+
+[Service]
+Type=oneshot
+# First boot downloads about 130 GB and retries until the network allows it.
+TimeoutStartSec=infinity
+ExecStart=/usr/libexec/halogen/fetch-models

@@ -1,0 +1,12 @@
+# Same job as upstream's unit, with this image's path. Runs at boot and after resume.
+[Unit]
+Description=Hold the AMD GPU fabric clock at its top level (GPU and NPU together)
+After=systemd-modules-load.service suspend.target hibernate.target hybrid-sleep.target suspend-then-hibernate.target
+Before=user@970.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/halogen/halogen-fabric-clock hold
+
+[Install]
+WantedBy=multi-user.target suspend.target hibernate.target hybrid-sleep.target suspend-then-hibernate.target

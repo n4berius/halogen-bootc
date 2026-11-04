@@ -1,0 +1,8 @@
+#!/bin/bash
+# Bind the LUKS volume to this machine's TPM. Usage: sudo halogen-enroll-tpm [device]
+set -euo pipefail
+device="${1:-$(awk 'NR == 1 && $2 ~ /^UUID=/ { print "/dev/disk/by-uuid/" substr($2, 6) }' /etc/crypttab)}"
+[ -n "$device" ] || { echo "no LUKS device found in /etc/crypttab; name it as an argument" >&2; exit 1; }
+systemd-cryptenroll --tpm2-device=auto --tpm2-pcrs=7 "$device"
+rpm-ostree kargs --append-if-missing=rd.luks.options=tpm2-device=auto
+echo "Enrolled $device. Keep the passphrase as your recovery key, then reboot."

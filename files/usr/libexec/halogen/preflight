@@ -1,0 +1,45 @@
+#!/bin/bash
+# Checks the host before Halogen starts. Also run by: halogenctl doctor
+set -uo pipefail
+sysfs="${HALOGEN_SYSFS:-/sys}"
+config="${HALOGEN_CONFIG_FILE:-/srv/configs/halogen.env}"
+clock="${HALOGEN_CLOCK:-/usr/libexec/halogen/halogen-fabric-clock}"
+cmdline="${HALOGEN_CMDLINE:-/proc/cmdline}"
+meminfo="${HALOGEN_MEMINFO:-/proc/meminfo}"
+dev="${HALOGEN_DEV:-/dev}"
+failed=0
+
+fail() { echo "preflight: FAIL: $*" >&2; failed=1; }
+warn() { echo "preflight: warning: $*" >&2; }
+
+# shellcheck disable=SC1090
+[ -r "$config" ] && . "$config"
+
+[ -e "$dev/kfd" ] || fail "$dev/kfd is missing, so the GPU driver is not ready"
+
+mem_gib="$(awk '$1 == "MemTotal:" { printf "%d", $2 / 1048576 }' "$meminfo")"
+[ "${mem_gib:-0}" -ge 100 ] \
+  || fail "the OS sees ${mem_gib:-0} GiB. Set the BIOS UMA frame buffer to its explicit minimum, not Auto"
+
+if [ -n "${HALOGEN_NPU_MODELS:-}" ]; then
+  [ -e "$dev/accel/accel0" ] || fail "$dev/accel/accel0 is missing. Check the IOMMU, amdxdna and NPU firmware"
+  grep -qw 'amd_iommu=off' "$cmdline" && fail "amd_iommu=off disables the NPU"
+  "$clock" status >/dev/null 2>&1 \
+    || fail "the fabric clock is not held. Check: systemctl status halogen-fabric-clock"
+  memlock="${HALOGEN_MEMLOCK:-$(ulimit -Hl)}"
+  [ "$memlock" = unlimited ] || fail "memlock is limited to $memlock KiB"
+fi
+
+for key in amdgpu.gttsize ttm.pages_limit; do
+  grep -q "$key=" "$cmdline" || warn "$key is not set on the kernel command line"
+done
+
+for f in "$sysfs"/class/drm/card*/device/mem_info_gtt_used; do
+  [ -r "$f" ] || continue
+  used_gib=$(($(cat "$f") / 1073741824))
+  [ "$used_gib" -lt 10 ] \
+    || warn "$used_gib GiB of GTT is already in use. If no GPU process is running, reboot before starting"
+done
+
+[ "$failed" = 0 ] || exit 1
+echo "preflight: ok"

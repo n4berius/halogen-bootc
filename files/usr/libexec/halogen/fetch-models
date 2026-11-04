@@ -1,0 +1,73 @@
+#!/bin/bash
+# Runs as the halogen user before the server. Exit 0 means the server can start.
+# Network failures retry forever. Problems a retry cannot fix exit non-zero.
+set -uo pipefail
+
+release="${HALOGEN_RELEASE_FILE:-/usr/share/halogen/release.env}"
+config="${HALOGEN_CONFIG_FILE:-/srv/configs/halogen.env}"
+models="${HALOGEN_MODELS_DIR:-/srv/models}"
+helper="${HALOGEN_FETCH_HELPER:-/usr/libexec/halogen/fetch-in-container}"
+needed_gib="${HALOGEN_MODELS_NEEDED_GIB:-125}"
+max_wait="${HALOGEN_RETRY_MAX_S:-300}"
+
+# shellcheck disable=SC1090
+. "$release"
+# shellcheck disable=SC1090
+. "$config"
+npu_models="${HALOGEN_NPU_MODELS:-}"
+vision="${HALOGEN_VISION_TOWER:-}"
+npu_dir="$models/npu/$HALOGEN_VERSION"
+stamp="$models/.fetch-stamp"
+want="$(printf '%s\n' "$HALOGEN_IMAGE" "$HALOGEN_WEIGHTS_REPO" "$HALOGEN_WEIGHTS_REVISION" "$npu_models" "$vision" | sha256sum | cut -d' ' -f1)"
+
+mkdir -p "$npu_dir" || exit 1
+
+wait_s=15
+until podman image exists "$HALOGEN_IMAGE"; do
+  podman pull "$HALOGEN_IMAGE" && break
+  echo "halogen-fetch: image pull failed, retrying in ${wait_s}s"
+  sleep "$wait_s"
+  wait_s=$((wait_s * 2)); [ "$wait_s" -le "$max_wait" ] || wait_s="$max_wait"
+done
+
+if [ "$(cat "$stamp" 2>/dev/null)" = "$want" ]; then
+  echo "halogen-fetch: models already match this release"
+  exit 0
+fi
+
+have_gib="$(du -s --block-size=1G "$models" 2>/dev/null | cut -f1)"
+free_gib="$(df --output=avail --block-size=1G "$models" | tail -n 1 | tr -d ' ')"
+if [ "$((${free_gib:-0} + ${have_gib:-0}))" -lt "$needed_gib" ]; then
+  echo "halogen-fetch: ${free_gib:-0} GiB free in $models; the models need about $needed_gib GiB" >&2
+  exit 1
+fi
+
+wait_s=15
+while :; do
+  podman run --rm --pull=never --read-only --tmpfs /tmp \
+    --cap-drop=all --security-opt no-new-privileges --entrypoint bash \
+    -e HF_HOME=/tmp/hf -e HF_HUB_OFFLINE=0 -e HF_HUB_DISABLE_TELEMETRY=1 -e HF_HUB_DISABLE_PROGRESS_BARS=1 \
+    -e "WEIGHTS_REPO=$HALOGEN_WEIGHTS_REPO" -e "WEIGHTS_REVISION=$HALOGEN_WEIGHTS_REVISION" \
+    -e "NPU_MODELS=$npu_models" -e "VISION=$vision" \
+    -v "$models:/models" -v "$npu_dir:/models/npu" -v "$helper:/fetch.sh:ro" \
+    "$HALOGEN_IMAGE" /fetch.sh
+  rc=$?
+  case "$rc" in
+    0) break ;;
+    3) echo "halogen-fetch: the configured models cannot be fetched; fix /srv/configs/halogen.env" >&2; exit 1 ;;
+  esac
+  echo "halogen-fetch: download stopped (exit $rc), resuming in ${wait_s}s"
+  sleep "$wait_s"
+  wait_s=$((wait_s * 2)); [ "$wait_s" -le "$max_wait" ] || wait_s="$max_wait"
+done
+
+# Halogen's own checker reads back the checkpoint that was downloaded.
+if ! podman run --rm --pull=never --device /dev/kfd --device /dev/dri --group-add keep-groups \
+    --ipc=host --ulimit memlock=-1:-1 -v "$models:/models:ro" \
+    "$HALOGEN_IMAGE" verify /models/qwen38-flash-next-v2.hgn; then
+  echo "halogen-fetch: the checkpoint failed verification; remove it and restart" >&2
+  exit 1
+fi
+
+printf '%s\n' "$want" > "$stamp.new" && mv "$stamp.new" "$stamp"
+echo "halogen-fetch: models ready"

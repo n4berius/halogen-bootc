@@ -1,0 +1,48 @@
+[Unit]
+Description=Halogen Flash server with NPU models
+Requires=halogen-fetch.service
+After=halogen-fetch.service
+# An unclean GPU exit can need a reboot, so do not restart forever.
+StartLimitIntervalSec=900
+StartLimitBurst=3
+
+[Container]
+Image=@HALOGEN_IMAGE@
+Pull=never
+ContainerName=halogen
+PublishPort=8731:8731
+AddDevice=/dev/kfd
+AddDevice=/dev/dri
+AddDevice=/dev/accel/accel0
+Ulimit=memlock=-1:-1
+PodmanArgs=--ipc=host --group-add=keep-groups
+EnvironmentFile=/srv/configs/halogen.env
+Environment=HALOGEN_API_KEY_FILE=/run/secrets/halogen-api-key
+StopTimeout=60
+
+# No download settings here: the server starts offline and read-only.
+Volume=/srv/models:/models:ro
+Volume=/srv/models/npu/@HALOGEN_VERSION@:/models/npu:ro
+Volume=/srv/configs/api-key:/run/secrets/halogen-api-key:ro
+
+# XRT from this OS image, at the three paths the libraries look for each other.
+Volume=/usr/lib/halogen/xrt/libxrt_coreutil.so.2:/opt/xilinx/xrt/lib/libxrt_coreutil.so.2:ro
+Volume=/usr/lib/halogen/xrt/libxrt_core.so.2:/opt/xilinx/xrt/lib/libxrt_core.so.2:ro
+Volume=/usr/lib/halogen/xrt/libxrt_driver_xdna.so.2:/opt/xilinx/xrt/lib/libxrt_driver_xdna.so.2:ro
+Volume=/usr/lib/halogen/xrt/libxrt_coreutil.so.2:/usr/lib/x86_64-linux-gnu/libxrt_coreutil.so.2:ro
+Volume=/usr/lib/halogen/xrt/libxrt_core.so.2:/usr/lib/x86_64-linux-gnu/libxrt_core.so.2:ro
+Volume=/usr/lib/halogen/xrt/libxrt_driver_xdna.so.2:/usr/lib/x86_64-linux-gnu/libxrt_driver_xdna.so.2:ro
+Volume=/usr/lib/halogen/xrt/libxrt_coreutil.so.2:/opt/xilinx/lib/x86_64-linux-gnu/libxrt_coreutil.so.2:ro
+Volume=/usr/lib/halogen/xrt/libxrt_core.so.2:/opt/xilinx/lib/x86_64-linux-gnu/libxrt_core.so.2:ro
+Volume=/usr/lib/halogen/xrt/libxrt_driver_xdna.so.2:/opt/xilinx/lib/x86_64-linux-gnu/libxrt_driver_xdna.so.2:ro
+
+[Service]
+ExecStartPre=/usr/libexec/halogen/preflight
+LimitMEMLOCK=infinity
+Restart=on-failure
+RestartSec=30
+TimeoutStartSec=900
+TimeoutStopSec=90
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,17 @@
+#!/bin/bash
+# Admin wrapper for the rootless Halogen service. Run with sudo.
+set -euo pipefail
+unit() { systemctl --user --machine=halogen@.host "$@"; }
+
+case "${1:-status}" in
+  status) unit --no-pager status halogen-fetch.service halogen.service || true ;;
+  start|stop|restart) unit "$1" halogen.service ;;
+  logs) exec journalctl -f -n 100 _SYSTEMD_USER_UNIT=halogen.service + _SYSTEMD_USER_UNIT=halogen-fetch.service ;;
+  fetch-logs) exec journalctl -f -n 100 _SYSTEMD_USER_UNIT=halogen-fetch.service ;;
+  doctor)
+    # Runs under the service manager, so it sees the service's real limits.
+    systemd-run --machine=halogen@.host --user --pipe --wait --quiet /usr/libexec/halogen/preflight
+    ;;
+  api-key) cat /srv/configs/api-key; echo ;;
+  *) echo "usage: halogenctl status|start|stop|restart|logs|fetch-logs|doctor|api-key" >&2; exit 2 ;;
+esac

@@ -1,0 +1,13 @@
+[Unit]
+Description=Prepare Halogen directories, configuration and API key
+RequiresMountsFor=/var/srv /var/lib/halogen
+After=systemd-sysusers.service systemd-tmpfiles-setup.service
+Before=user@970.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/libexec/halogen/prepare
+
+[Install]
+WantedBy=multi-user.target

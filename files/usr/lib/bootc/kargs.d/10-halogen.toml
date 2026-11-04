@@ -1,0 +1,4 @@
+# For a machine with 128 GB installed. iommu=pt keeps the NPU available;
+# amd_iommu=off would remove it.
+kargs = ["amdgpu.gttsize=126976", "ttm.pages_limit=32505856", "iommu=pt"]
+match-architectures = ["x86_64"]
