@@ -2,6 +2,7 @@
 import pathlib, re, socket, subprocess, sys, time
 
 sock_path, serial, out = sys.argv[1:4]
+luks = len(sys.argv) > 4 and sys.argv[4] == "luks"
 serial, out = pathlib.Path(serial), pathlib.Path(out)
 KEYS = {" ": "spc", "-": "minus", "=": "equal", ".": "dot", "/": "slash", ";": "semicolon",
         ",": "comma", "'": "apostrophe", "\n": "ret"}
@@ -31,6 +32,10 @@ while time.time() < deadline:
     cmd(f"screendump {shot} -f png")
     time.sleep(2)
     text = subprocess.run(["tesseract", shot, "-"], capture_output=True, text=True).stdout
+    if luks and "passphrase" in text.lower():
+        typed("halogentest\n")
+        luks = False
+        continue
     if "login:" in text:
         break
 else:
@@ -45,7 +50,7 @@ typed("timeout 180 sh -c 'until journalctl -o cat _SYSTEMD_USER_UNIT=halogen-fet
 time.sleep(5)
 typed("{ echo RESULT-START; cat /proc/cmdline; dmesg | grep -i secure; bootctl status | grep -i secure; "
       "bootc status | head -12; udevadm verify /usr/lib/udev/rules.d/70-halogen-devices.rules; "
-      "sestatus | head -3; id halogen; loginctl show-user halogen -p Linger; "
+      "lsblk -f | grep -i crypto; sestatus | head -3; id halogen; loginctl show-user halogen -p Linger; "
       "systemctl status user@970.service --no-pager | head -4; journalctl --no-pager -n 8 -o cat _SYSTEMD_USER_UNIT=halogen-fetch.service; systemctl --failed --no-legend --no-pager; "
       "systemctl is-active firewalld halogen-prepare; echo RESULT-END; } > /dev/ttyS0 2>&1\n")
 
