@@ -39,13 +39,21 @@ Download your edition's ISO parts from this repository's Releases page. GitHub l
 file to 2 GiB, so the ISO is split. Join and check it:
 
 ```bash
-cat halogen-flash-bootc-*-npu.iso.part* > halogen-flash-bootc-npu.iso
-sha256sum halogen-flash-bootc-npu.iso
-cat halogen-flash-bootc-*-npu.iso.sha256
+# Replace the tag with the release you downloaded
+cat halogen-flash-bootc-v0.18.23-alpha.1-npu.iso.part* > halogen-flash-bootc-v0.18.23-alpha.1-npu.iso
+sha256sum -c halogen-flash-bootc-v0.18.23-alpha.1-npu.iso.sha256
 ```
 
-The two hashes must match. For the other edition, replace `npu` with `no-npu`. Alpha, beta
-and RC releases are pre-releases, and [RELEASING.md](RELEASING.md) explains each channel.
+It must say `OK`. For the other edition, use the `-no-npu` files. Alpha, beta and RC
+releases are pre-releases, and [RELEASING.md](RELEASING.md) explains each channel.
+
+A machine installed from a pre-release stays on that exact build, so `bootc upgrade` brings
+it nothing. Once a stable release is out, move to it:
+
+```bash
+sudo bootc switch ghcr.io/n4berius/halogen-flash-bootc:0.18.23
+sudo systemctl reboot
+```
 
 To build an ISO yourself, see [Build](README.md#build) in the README.
 
@@ -57,7 +65,7 @@ without asking:
 
 ```bash
 lsblk
-sudo dd if=halogen-flash-bootc-npu.iso of=/dev/sdX bs=4M status=progress conv=fsync
+sudo dd if=halogen-flash-bootc-v0.18.23-alpha.1-npu.iso of=/dev/sdX bs=4M status=progress conv=fsync
 ```
 
 ## 5. Run the installer
@@ -134,7 +142,8 @@ sudo systemctl reboot
 ```
 
 Keep the passphrase as your recovery key. TPM unlock uses PCR 7, so changing Secure Boot
-settings means entering the passphrase and running `halogen-enroll-tpm` again.
+settings means entering the passphrase and running `halogen-enroll-tpm` again. This step has
+not been tested yet, so if the next boot still asks for the passphrase, report it.
 
 ## If something goes wrong
 

@@ -40,7 +40,8 @@ pushed before the ISO tests run. If a run fails, fix it on `main` and cut the ne
 ## Move to a new Halogen version
 
 1. Read Halogen's changelog for host, NPU and flag changes.
-2. Update `HALOGEN_VERSION`, `HALOGEN_SOURCE_COMMIT` and the three hashes in `versions.env`.
+2. Update `HALOGEN_VERSION`, `HALOGEN_DIGEST` (from `skopeo inspect`), `HALOGEN_SOURCE_COMMIT`
+   and the three hashes in `versions.env`.
 3. Run `scripts/gen-options.py` on the new `docs/FLAGS.md`, and review new options.
 4. Open a pull request, merge it, and start again at alpha.
 

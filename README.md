@@ -125,8 +125,8 @@ sudo HALOGEN_VARIANT=no-npu scripts/build.sh
 sudo HALOGEN_VARIANT=no-npu scripts/build-iso.sh
 ```
 
-The build resolves the Halogen tag to a digest. To lock that in git, put it in
-`HALOGEN_DIGEST` in `versions.env`.
+`versions.env` pins Halogen by digest, so every build runs the same container until the pin
+is changed on purpose.
 
 ## Configure
 

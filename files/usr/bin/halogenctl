@@ -10,6 +10,7 @@ case "${1:-status}" in
   fetch-logs) exec journalctl -f -n 100 _SYSTEMD_USER_UNIT=halogen-fetch.service ;;
   doctor)
     # Runs under the service manager, so it sees the service's real limits.
+    systemd-run --machine=halogen@.host --user --pipe --wait --quiet /usr/libexec/halogen/render-config >/dev/null
     systemd-run --machine=halogen@.host --user --pipe --wait --quiet /usr/libexec/halogen/preflight
     ;;
   config)

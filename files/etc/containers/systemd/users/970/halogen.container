@@ -1,5 +1,5 @@
 [Unit]
-Description=Halogen Flash server with NPU models
+Description=Halogen Flash server
 Requires=halogen-fetch.service
 After=halogen-fetch.service
 # An unclean GPU exit can need a reboot, so do not restart forever.
