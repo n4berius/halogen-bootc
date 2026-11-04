@@ -1,4 +1,4 @@
-name: Build HalogenOS
+name: Build OS image
 on:
   push:
     branches: [main]

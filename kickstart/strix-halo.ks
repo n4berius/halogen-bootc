@@ -4,7 +4,7 @@ text
 lang en_US.UTF-8
 keyboard us
 timezone Etc/UTC --utc
-network --bootproto=dhcp --device=link --activate --hostname=halogenos
+network --bootproto=dhcp --device=link --activate --hostname=strix-halo
 selinux --enforcing
 rootpw --lock
 user --name=naberius --groups=wheel --lock
@@ -25,5 +25,5 @@ logvol /var/srv       --vgname=vg0 --name=srv      --size=204800 --grow --fstype
 
 # Repeated here because a kickstart install may not apply kargs.d on first boot.
 bootloader --append="amdgpu.gttsize=126976 ttm.pages_limit=32505856 iommu=pt"
-ostreecontainer --url=ghcr.io/n4berius/halogenos:45 --no-signature-verification
+ostreecontainer --url=ghcr.io/n4berius/halogen-bootc:45 --no-signature-verification
 reboot

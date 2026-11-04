@@ -1,8 +1,8 @@
-# HalogenOS
+# halogen-bootc
 
-Halogen purpose-built operating system to run Halogen-built q38fn and its NPU models on a dedicated Strix Halo 128GB server.
+Purpose-built operating system that runs halogen.
 
-It is an image-based Fedora 45 appliance that runs
+It is an image-based Fedora 45 appliance for one 128 GB AMD Strix Halo machine. It runs
 [Halogen](https://github.com/peonist-ai/halogen-flash-server) with its NPU models,
 pinned to one release, with the host already configured.
 
@@ -37,13 +37,13 @@ version, fetches only what is needed. Each version keeps its NPU files in
 
 ## Build
 
-Pushing to `main` builds and pushes `ghcr.io/<owner>/halogenos:45`, and a weekly
+Pushing to `main` builds and pushes `ghcr.io/<owner>/halogen-bootc:45`, and a weekly
 build picks up Fedora updates. To build locally, you need Podman and Skopeo:
 
 ```bash
 tests/run.sh
-scripts/build.sh ghcr.io/n4berius/halogenos:45
-podman push ghcr.io/n4berius/halogenos:45
+scripts/build.sh ghcr.io/n4berius/halogen-bootc:45
+podman push ghcr.io/n4berius/halogen-bootc:45
 ```
 
 The first build resolves Halogen 0.18.23 to a digest. To lock that in git, put it in
@@ -112,7 +112,7 @@ Run these on the hardware, and treat a failure as a repo bug:
 
 ## Name
 
-HalogenOS is a private working name. Halogen's trademark policy does not allow "halogen"
-in another machine-learning product or project name without written permission, so ask
-legal@peonist.ai before publishing or distributing it under this name. This project is
-not affiliated with or endorsed by Peonist.
+halogen-bootc is a private working name. Halogen's trademark policy does not allow
+"halogen" in another machine-learning product or project name without written permission,
+so ask legal@peonist.ai before publishing or distributing it under this name. This project
+runs halogen and is not affiliated with or endorsed by Peonist.

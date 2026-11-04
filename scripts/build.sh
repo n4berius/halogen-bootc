@@ -4,7 +4,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 # shellcheck source=versions.env
 . ./versions.env
-TAG="${1:-localhost/halogenos:45}"
+TAG="${1:-localhost/halogen-bootc:45}"
 SOURCE=ghcr.io/peonist-ai/halogen-flash-server
 
 if [ -z "$HALOGEN_DIGEST" ]; then
