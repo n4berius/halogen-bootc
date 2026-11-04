@@ -32,8 +32,9 @@ ARG HALOGEN_WEIGHTS_REPO
 ARG HALOGEN_WEIGHTS_REVISION
 
 RUN dnf -y --setopt=install_weak_deps=False install \
-      amdgpu-firmware firewalld linux-firmware tpm2-tss && \
-    dnf clean all
+      amd-gpu-firmware firewalld linux-firmware tpm2-tss && \
+    dnf clean all && \
+    ls -d /usr/lib/firmware/amdgpu /usr/lib/firmware/amdnpu
 
 COPY files/ /
 COPY --from=xrt /out/lib/ /usr/lib/halogen/xrt/
