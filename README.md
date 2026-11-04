@@ -8,8 +8,8 @@ from USB, boots with Secure Boot on, and runs
 release, with or without its NPU models. The host is already configured, and there is no
 desktop after install.
 
-> **Status:** both editions build, install and boot in a virtual machine with Secure Boot on.
-> Neither has run on real hardware yet, so the GPU, NPU, model download, TPM enrollment and
+> **Status:** the NPU edition builds, installs and boots in a virtual machine with Secure Boot
+> on. It has not run on real hardware, so the GPU, NPU, model download, TPM enrollment and
 > Halogen itself are still untested on a Strix Halo.
 
 This is an independent project. It is not made, endorsed or supported by Peonist, LLC.
@@ -63,6 +63,12 @@ For an exact match, view the same file at the commit in `versions.env`.
 Base image: Fedora's official `quay.io/fedora/fedora-bootc:45`. There is no separate
 image-based Fedora Server edition, so this adds only what the appliance needs.
 
+## Install
+
+See **[INSTALL.md](INSTALL.md)**. In short: write the ISO for your edition to USB, boot it, pick
+a disk and optional LUKS in the installer, create your admin account, and let the first boot
+download the models.
+
 ## What lives where
 
 | Location | Contents | Changes through |
@@ -86,20 +92,6 @@ image-based Fedora Server edition, so this adds only what the appliance needs.
 `amd_iommu=off` turns off DMA translation machine-wide. That suits a dedicated server,
 but it is a real security trade-off. To keep the IOMMU on, change the edition's `kargs.d` file.
 
-## First boot
-
-1. `halogen-prepare` creates the directories, default config and API key.
-2. `halogen-fabric-clock` holds the clock Halogen needs for GPU and NPU together.
-3. `halogen-fetch` pulls the pinned image and downloads the models. Interrupted
-   downloads resume, and network failures retry until they succeed.
-4. Halogen's own `verify` mode checks the Flash checkpoint. The NPU files are checked
-   against the hashes recorded in the pinned image.
-5. Halogen starts read-only with no download settings, on port 8731.
-
-Later boots skip the download. Changing the model list, or moving to a new Halogen
-version, fetches only what is needed. Each version keeps its NPU files in
-`/srv/models/npu/<version>`, so an OS rollback finds the files it expects.
-
 ## Build
 
 Images are tagged with the Halogen version they carry, for example
@@ -121,31 +113,6 @@ sudo HALOGEN_VARIANT=no-npu scripts/build-iso.sh
 
 The build resolves the Halogen tag to a digest. To lock that in git, put it in
 `HALOGEN_DIGEST` in `versions.env`.
-
-## Install from USB
-
-1. In the BIOS, set the UMA frame buffer to its explicit minimum and update the firmware.
-   Secure Boot can stay on.
-2. Write the ISO to a USB drive with Fedora Media Writer or `dd`, then boot from it.
-3. In the graphical installer, choose the disk. Tick the encryption option if you want
-   LUKS, and create your administrator account there.
-4. After the install, the machine reboots to a text login. It has no desktop.
-5. The first boot downloads the Halogen container and about 125 GB of models, so it needs
-   internet access. Follow it with `sudo halogenctl fetch-logs`.
-6. If you chose LUKS, you can run `sudo halogen-enroll-tpm`, then reboot, to unlock it with
-   the TPM. Keep the passphrase as your recovery key.
-
-The installer's graphical environment exists only on the USB drive. The OS is copied from
-the image inside the ISO, so the install itself needs no network or registry login.
-
-**Secure Boot:** no MOK enrollment is needed. The image uses Fedora's signed boot chain
-and kernel, and the NPU driver is part of that kernel. A MOK would only be needed if you
-add your own kernel modules. TPM unlock uses PCR 7, so changing Secure Boot settings means
-entering the passphrase and running `halogen-enroll-tpm` again.
-
-Choose the ISO for the edition you want. For an unattended install of the NPU edition,
-`kickstart/strix-halo.ks` is also available. It erases
-`nvme0n1`, and it needs your SSH key and a registry the installer can read.
 
 ## Configure
 
@@ -206,24 +173,6 @@ To publish a new version, update `HALOGEN_VERSION`, `HALOGEN_SOURCE_COMMIT` and 
 hashes in `versions.env`, plus the tag in the kickstart. A new version downloads its NPU
 files, about 15 GB, on its first boot. Remove old `/srv/models/npu/<version>` folders once
 you no longer need to roll back to them.
-
-## First-run checklist
-
-Run these on the hardware, and treat a failure as a repo bug:
-
-- `sudo halogenctl doctor` passes, and `cat /proc/cmdline` shows the GTT settings and `iommu=pt`.
-- `ls -l /dev/kfd /dev/dri/renderD*` shows group `halogen`, and `ls -lZ /dev/accel/accel0`
-  shows group `halogen` and type `dri_device_t`.
-- With Secure Boot on, the kernel runs in lockdown. Confirm `halogen-fabric-clock status` holds
-  the clock and that GPU and NPU requests work.
-- `bootctl status` reports Secure Boot enabled, if you left it on.
-- `systemctl --failed` is clean. Upstream warns `systemd-remount-fs.service` can fail on
-  Anaconda-installed bootc systems.
-- `sudo ausearch -m avc -ts boot` is empty. If `/dev/kfd` shows `denied { map }`, run
-  `sudo setsebool -P container_use_devices true`.
-- `/v1/models` lists the Flash and NPU models.
-- A soak test mixes Flash and NPU load for several hours. Kernel 7.2 has a reported GPU
-  memory fault, and Halogen's reference host ran 7.1.8.
 
 ## Choices worth knowing
 
