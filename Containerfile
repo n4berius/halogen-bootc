@@ -84,8 +84,8 @@ RUN set -eu; \
     img="/usr/lib/modules/${kver}/initramfs.img"; \
     env DRACUT_NO_XATTR=1 dracut --no-hostonly -f "$img" "$kver"; \
     contents="$(lsinitrd "$img")"; \
-    for want in usr/lib/systemd/systemd-cryptsetup systemd-cryptsetup-generator libcryptsetup sbin/lvm; do \
-      echo "$contents" | grep -q "$want" || { echo "initramfs is missing $want" >&2; exit 1; }; \
+    for want in 'usr/lib/systemd/systemd-cryptsetup$' 'systemd-cryptsetup-generator$' 'libcryptsetup' 'bin/lvm$'; do \
+      echo "$contents" | grep -qE "$want" || { echo "initramfs is missing $want" >&2; exit 1; }; \
     done
 
 RUN bootc container lint
