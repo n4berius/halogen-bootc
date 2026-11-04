@@ -17,9 +17,23 @@ image-based Fedora Server edition, so this adds only what the appliance needs.
 | Location | Contents | Changes through |
 |---|---|---|
 | OS image | Kernel arguments, XRT, services, firewall, Halogen digest | Rebuild and `bootc upgrade` |
-| `/srv/configs` | `halogen.env`, `api-key` | Edit on the machine |
+| `/srv/configs` | `halogen.env` with every allowed option, `api-key` | Edit on the machine |
+| `/usr/share/halogen` | Locked settings and the allowed-option list | Rebuild only, read-only |
 | `/srv/models` | Flash weights and NPU models, about 125 GB | Fetched on first boot |
 | BIOS | UMA frame buffer at its explicit minimum, not Auto; newest firmware | Set by hand |
+
+## Editions
+
+| | With NPU | Without NPU |
+|---|---|---|
+| Image | `halogen-flash-bootc:0.18.23` | `halogen-flash-bootc:0.18.23-no-npu` |
+| Serves | Flash and NPU models | Flash only |
+| IOMMU | `iommu=pt`, which the NPU needs | `amd_iommu=off`, for Halogen's measured 13-16% more prefill |
+| Includes | XRT, the fabric clock service | Neither |
+| KV pool | 262,144 positions, leaving room for NPU models | Halogen's default |
+
+`amd_iommu=off` turns off DMA translation machine-wide. That suits a dedicated server,
+but it is a real security trade-off. To keep the IOMMU on, change the edition's `kargs.d` file.
 
 ## First boot
 
@@ -50,6 +64,8 @@ To build locally, you need Podman and Skopeo:
 tests/run.sh
 sudo scripts/build.sh
 sudo scripts/build-iso.sh    # writes the ISO under output/
+sudo HALOGEN_VARIANT=no-npu scripts/build.sh
+sudo HALOGEN_VARIANT=no-npu scripts/build-iso.sh
 ```
 
 The build resolves the Halogen tag to a digest. To lock that in git, put it in
@@ -76,8 +92,29 @@ and kernel, and the NPU driver is part of that kernel. A MOK would only be neede
 add your own kernel modules. TPM unlock uses PCR 7, so changing Secure Boot settings means
 entering the passphrase and running `halogen-enroll-tpm` again.
 
-For an unattended install, `kickstart/strix-halo.ks` is also available. It erases
+Choose the ISO for the edition you want. For an unattended install of the NPU edition,
+`kickstart/strix-halo.ks` is also available. It erases
 `nvme0n1`, and it needs your SSH key and a registry the installer can read.
+
+## Configure
+
+Every option Halogen allows on this system is listed, commented out, in
+`/srv/configs/halogen.env`. Uncomment a line, set its value, and apply it:
+
+```bash
+sudo nano /srv/configs/halogen.env
+sudo halogenctl restart
+sudo halogenctl config    # what is in effect, and the locked settings
+```
+
+Only listed options reach Halogen. Typos and locked settings are ignored and logged, so they
+cannot change the server or stop it. The file is read as plain settings and never run as a
+script. Locked values live in `/usr/share/halogen/locked.env`, on the read-only OS, and
+upgrades keep your file. New options in a later release appear in
+`/usr/share/halogen/halogen.env.default`.
+
+To change what is allowed or locked, edit `config/locked.env` or `BLOCKED` in
+`scripts/gen-options.py`, run that script on the new `docs/FLAGS.md`, and rebuild.
 
 ## Operate
 
@@ -87,6 +124,7 @@ sudo halogenctl fetch-logs   # first-boot download progress
 sudo halogenctl logs         # server and fetch logs
 sudo halogenctl doctor       # BIOS, kernel, NPU, clock and memlock checks
 sudo halogenctl restart      # after editing /srv/configs/halogen.env
+sudo halogenctl config       # show the settings in effect
 sudo halogenctl api-key      # print the API key
 ```
 
@@ -137,8 +175,8 @@ Run these on the hardware, and treat a failure as a repo bug:
 
 - **XRT comes from Debian.** Fedora's package appears only in Rawhide, and the libraries
   run inside Halogen's Debian 13 container, so Debian's build matches its C runtime.
-- **The IOMMU stays on.** The NPU needs it, at the cost of Halogen's measured 13–16%
-  prefill gain with `amd_iommu=off`.
+- **The NPU edition keeps the IOMMU on** because the NPU needs it, at the cost of the
+  prefill gain the no-NPU edition takes.
 - **Halogen's script and terms are fetched at build time** and checked by hash, so this
   repo redistributes none of them. Halogen's image and weights keep their own licenses.
 

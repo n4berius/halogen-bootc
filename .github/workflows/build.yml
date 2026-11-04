@@ -14,18 +14,24 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [npu, no-npu]
+    env:
+      HALOGEN_VARIANT: ${{ matrix.variant }}
     steps:
       - uses: actions/checkout@v4
       - name: Run checks
         run: tests/run.sh
-      - name: Read version
-        run: grep '^HALOGEN_VERSION=' versions.env >> "$GITHUB_ENV"
       - name: Build
-        run: scripts/build.sh "ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/halogen-flash-bootc:$HALOGEN_VERSION"
+        run: scripts/build.sh
       - name: Push
         if: github.event_name != 'pull_request'
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u "${{ github.actor }}" --password-stdin
-          image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/halogen-flash-bootc"
-          podman push "$image:$HALOGEN_VERSION"
-          podman push "$image:$HALOGEN_VERSION" "$image:latest"
+          image="$(scripts/image-ref.sh)"
+          latest="${image%:*}:latest"
+          [ "$HALOGEN_VARIANT" = npu ] || latest="$latest-no-npu"
+          podman push "$image"
+          podman push "$image" "$latest"

@@ -2,6 +2,6 @@ label: "halogen-flash-bootc"
 grub2:
   timeout: 5
   entries:
-    - name: "Install halogen-flash-bootc"
+    - name: "Install halogen-flash-bootc (@EDITION@)"
       linux: ${kernelpath} ${root} inst.graphical console=ttyS0 console=tty0
       initrd: ${initrdpath}

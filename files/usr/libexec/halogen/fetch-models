@@ -4,7 +4,7 @@
 set -uo pipefail
 
 release="${HALOGEN_RELEASE_FILE:-/usr/share/halogen/release.env}"
-config="${HALOGEN_CONFIG_FILE:-/srv/configs/halogen.env}"
+render="${HALOGEN_RENDER:-/usr/libexec/halogen/render-config}"
 models="${HALOGEN_MODELS_DIR:-/srv/models}"
 helper="${HALOGEN_FETCH_HELPER:-/usr/libexec/halogen/fetch-in-container}"
 needed_gib="${HALOGEN_MODELS_NEEDED_GIB:-125}"
@@ -12,10 +12,10 @@ max_wait="${HALOGEN_RETRY_MAX_S:-300}"
 
 # shellcheck disable=SC1090
 . "$release"
-# shellcheck disable=SC1090
-. "$config"
-npu_models="${HALOGEN_NPU_MODELS:-}"
-vision="${HALOGEN_VISION_TOWER:-}"
+effective="$("$render")" || exit 1
+setting() { sed -n "s/^$1=//p" "$effective" | tail -n 1; }
+npu_models="$(setting HALOGEN_NPU_MODELS)"
+vision="$(setting HALOGEN_VISION_TOWER)"
 npu_dir="$models/npu/$HALOGEN_VERSION"
 stamp="$models/.fetch-stamp"
 want="$(printf '%s\n' "$HALOGEN_IMAGE" "$HALOGEN_WEIGHTS_REPO" "$HALOGEN_WEIGHTS_REVISION" "$npu_models" "$vision" | sha256sum | cut -d' ' -f1)"

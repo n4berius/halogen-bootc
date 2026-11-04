@@ -3,6 +3,7 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 tests/static.sh
+tests/config.sh
 tests/first-boot.sh
 tests/preflight.sh
 echo "all checks passed"

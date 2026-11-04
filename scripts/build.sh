@@ -1,11 +1,12 @@
 #!/bin/bash
-# Build the OS image, tagged with its Halogen version.
-# Usage: scripts/build.sh [image-reference]
+# Build an OS image, tagged with its Halogen version.
+# Usage: [HALOGEN_VARIANT=npu|no-npu] scripts/build.sh
 set -euo pipefail
 cd "$(dirname "$0")/.."
 # shellcheck source=versions.env
 . ./versions.env
-TAG="${1:-ghcr.io/n4berius/halogen-flash-bootc:$HALOGEN_VERSION}"
+VARIANT="${HALOGEN_VARIANT:-npu}"
+TAG="$(scripts/image-ref.sh)"
 SOURCE=ghcr.io/peonist-ai/halogen-flash-server
 
 if [ -z "$HALOGEN_DIGEST" ]; then
@@ -25,6 +26,7 @@ podman build --pull=newer -t "$TAG" \
   --build-arg "XRT_MIN_VERSION=$XRT_MIN_VERSION" \
   --build-arg "HALOGEN_IMAGE=$SOURCE@$HALOGEN_DIGEST" \
   --build-arg "HALOGEN_VERSION=$HALOGEN_VERSION" \
+  --build-arg "HALOGEN_VARIANT=$VARIANT" \
   --build-arg "HALOGEN_SOURCE_COMMIT=$HALOGEN_SOURCE_COMMIT" \
   --build-arg "HALOGEN_CLOCK_SHA256=$HALOGEN_CLOCK_SHA256" \
   --build-arg "HALOGEN_LICENSE_SHA256=$HALOGEN_LICENSE_SHA256" \

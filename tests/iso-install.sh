@@ -1,8 +1,8 @@
 #!/bin/bash
 # Install the ISO to a blank disk unattended, boot it with Secure Boot on, and report on it.
-# Usage: tests/iso-install.sh path/to.iso os-image-reference output-dir
+# Usage: tests/iso-install.sh path/to.iso os-image-reference output-dir variant
 set -euo pipefail
-iso="$1"; target="$2"; out="$3"; mkdir -p "$out/oem"
+iso="$1"; target="$2"; out="$3"; variant="$4"; mkdir -p "$out/oem"
 here="$(cd "$(dirname "$0")" && pwd)"
 code=/usr/share/OVMF/OVMF_CODE_4M.secboot.fd
 cp /usr/share/OVMF/OVMF_VARS_4M.ms.fd "$out/vars.fd"
@@ -44,6 +44,6 @@ trap 'kill "$pid" 2>/dev/null || true' EXIT
 python3 "$here/vm-login.py" "$out/monitor.sock" "$out/firstboot.log" "$out"
 cat "$out/report.txt"
 grep -q 'amdgpu.gttsize=126976' "$out/report.txt"
-grep -q 'iommu=pt' "$out/report.txt"
+if [ "$variant" = npu ]; then grep -q 'iommu=pt' "$out/report.txt"; else grep -q 'amd_iommu=off' "$out/report.txt"; fi
 grep -qi 'secure boot.*enabled\|Secure Boot: enabled' "$out/report.txt"
 echo "installed system verified"
