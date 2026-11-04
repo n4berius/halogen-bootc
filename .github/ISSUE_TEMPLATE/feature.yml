@@ -1,0 +1,23 @@
+name: Feature request
+description: Suggest a change to this OS image, installer or configuration.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like to happen?
+    validations:
+      required: true
+  - type: dropdown
+    id: edition
+    attributes:
+      label: Edition
+      options: [Both, With NPU, Without NPU]
+    validations:
+      required: true

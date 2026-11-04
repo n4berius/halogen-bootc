@@ -3,9 +3,11 @@ on:
   push:
     branches: [main]
   pull_request:
-  schedule:
-    - cron: "17 6 * * 1"
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -22,16 +24,26 @@ jobs:
       HALOGEN_VARIANT: ${{ matrix.variant }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Run checks
         run: tests/run.sh
+      - name: See whether the image changed
+        id: changes
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          if git diff --name-only "$BASE" HEAD | scripts/needs-build.sh; then
+            echo "build=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "build=false" >> "$GITHUB_OUTPUT"
+            echo "Only docs or repository files changed, so the build is skipped."
+          fi
       - name: Build
+        if: steps.changes.outputs.build == 'true'
         run: scripts/build.sh
       - name: Push
-        if: github.event_name != 'pull_request'
+        if: github.event_name != 'pull_request' && steps.changes.outputs.build == 'true'
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u "${{ github.actor }}" --password-stdin
-          image="$(scripts/image-ref.sh)"
-          latest="${image%:*}:latest"
-          [ "$HALOGEN_VARIANT" = npu ] || latest="$latest-no-npu"
-          podman push "$image"
-          podman push "$image" "$latest"
+          podman push "$(scripts/image-ref.sh)" "$(scripts/image-ref.sh | sed 's/:[^:]*$//'):edge$([ "$HALOGEN_VARIANT" = npu ] || echo -no-npu)"

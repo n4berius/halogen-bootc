@@ -1,0 +1,49 @@
+name: Hardware test report
+description: Share how a release ran on a real machine, whether it worked or not.
+labels: ["needs: hardware test"]
+body:
+  - type: input
+    id: machine
+    attributes:
+      label: Machine and memory
+      placeholder: AMD AI Developer Platform, 128 GB
+    validations:
+      required: true
+  - type: input
+    id: bios
+    attributes:
+      label: BIOS version and UMA frame buffer setting
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Image tag
+      description: From `sudo bootc status`.
+    validations:
+      required: true
+  - type: dropdown
+    id: edition
+    attributes:
+      label: Edition
+      options: [With NPU, Without NPU]
+    validations:
+      required: true
+  - type: checkboxes
+    id: results
+    attributes:
+      label: What worked?
+      options:
+        - label: Installed from USB with Secure Boot on
+        - label: First boot downloaded the models
+        - label: "`sudo halogenctl doctor` passed"
+        - label: Flash model answered requests
+        - label: NPU models answered requests
+        - label: LUKS with TPM unlock
+        - label: Several hours of mixed load without a hang
+  - type: textarea
+    id: output
+    attributes:
+      label: Diagnostics
+      description: Output of `sudo halogenctl doctor`, plus anything that failed. Do not paste your API key.
+      render: text

@@ -35,9 +35,19 @@ For how Halogen itself behaves, see its
 
 ## 3. Get the ISO
 
-Open the newest successful **Build USB installer** run in this repository's Actions tab, and
-download the installer for your edition. To build one yourself, see
-[Build](README.md#build) in the README.
+Download your edition's ISO parts from this repository's Releases page. GitHub limits each
+file to 2 GiB, so the ISO is split. Join and check it:
+
+```bash
+cat halogen-flash-bootc-*-npu.iso.part* > halogen-flash-bootc-npu.iso
+sha256sum halogen-flash-bootc-npu.iso
+cat halogen-flash-bootc-*-npu.iso.sha256
+```
+
+The two hashes must match. For the other edition, replace `npu` with `no-npu`. Alpha, beta
+and RC releases are pre-releases, and [RELEASING.md](RELEASING.md) explains each channel.
+
+To build an ISO yourself, see [Build](README.md#build) in the README.
 
 ## 4. Write the USB drive
 
@@ -47,7 +57,7 @@ without asking:
 
 ```bash
 lsblk
-sudo dd if=bootc-fedora-45-generic-iso-x86_64.iso of=/dev/sdX bs=4M status=progress conv=fsync
+sudo dd if=halogen-flash-bootc-npu.iso of=/dev/sdX bs=4M status=progress conv=fsync
 ```
 
 ## 5. Run the installer

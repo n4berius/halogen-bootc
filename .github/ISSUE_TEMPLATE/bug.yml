@@ -1,0 +1,39 @@
+name: Bug report
+description: Something is wrong with this OS image, installer or configuration.
+labels: [bug]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Image tag
+      description: From `sudo bootc status`, such as 0.18.23-alpha.1.
+    validations:
+      required: true
+  - type: dropdown
+    id: edition
+    attributes:
+      label: Edition
+      options: [With NPU, Without NPU]
+    validations:
+      required: true
+  - type: dropdown
+    id: stage
+    attributes:
+      label: Where did it fail?
+      options: [Installer, First boot download, Halogen startup, Serving, Upgrade or rollback]
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+    validations:
+      required: true
+  - type: textarea
+    id: output
+    attributes:
+      label: Diagnostics
+      description: Output of `sudo halogenctl doctor`, `status` and `config`. Do not paste your API key.
+      render: text
+    validations:
+      required: true

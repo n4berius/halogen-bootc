@@ -1,0 +1,38 @@
+name: Refresh stable with Fedora updates
+on:
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  refresh:
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [npu, no-npu]
+    env:
+      HALOGEN_VARIANT: ${{ matrix.variant }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Find the newest stable release
+        id: stable
+        run: |
+          tag="$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+(-r[0-9]+)?$' | head -1 || true)"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+      - if: steps.stable.outputs.tag != ''
+        run: git checkout "${{ steps.stable.outputs.tag }}"
+      - name: Rebuild and push
+        if: steps.stable.outputs.tag != ''
+        run: |
+          eval "$(scripts/release-info.sh "${{ steps.stable.outputs.tag }}" | grep '^image_tag=')"
+          export IMAGE_TAG="$image_tag"
+          scripts/build.sh
+          echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u "${{ github.actor }}" --password-stdin
+          scripts/push-image.sh stable

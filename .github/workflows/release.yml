@@ -1,0 +1,104 @@
+name: Release
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  info:
+    runs-on: ubuntu-24.04
+    outputs:
+      channel: ${{ steps.info.outputs.channel }}
+      image_tag: ${{ steps.info.outputs.image_tag }}
+      prerelease: ${{ steps.info.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Check the tag is on main
+        run: git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+      - id: info
+        run: scripts/release-info.sh "$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
+
+  image:
+    needs: info
+    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [npu, no-npu]
+    env:
+      HALOGEN_VARIANT: ${{ matrix.variant }}
+      IMAGE_TAG: ${{ needs.info.outputs.image_tag }}
+      CHANNEL: ${{ needs.info.outputs.channel }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: tests/run.sh
+      - run: scripts/build.sh
+      - name: Push
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u "${{ github.actor }}" --password-stdin
+          scripts/push-image.sh "$CHANNEL"
+
+  iso:
+    needs: [info, image]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [npu, no-npu]
+    env:
+      HALOGEN_VARIANT: ${{ matrix.variant }}
+      IMAGE_TAG: ${{ needs.info.outputs.image_tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Free disk space
+        run: sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc
+      - name: Install tools
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -yq qemu-system-x86 qemu-utils ovmf tesseract-ocr genisoimage
+          sudo chmod 666 /dev/kvm
+      - name: Pull the published image
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | sudo podman login ghcr.io -u "${{ github.actor }}" --password-stdin
+          sudo podman pull "$(scripts/image-ref.sh)"
+      - name: Build ISO
+        run: sudo -E scripts/build-iso.sh
+      - name: Install and boot with Secure Boot on
+        run: tests/iso-install.sh "$(sudo find output -name '*.iso' | head -1)" "$(scripts/image-ref.sh)" install-test "$HALOGEN_VARIANT"
+      - name: Package for GitHub Releases
+        run: |
+          sudo chown -R "$USER" output
+          name="halogen-flash-bootc-$GITHUB_REF_NAME-$HALOGEN_VARIANT.iso"
+          mkdir assets
+          mv "$(find output -name '*.iso' | head -1)" "assets/$name"
+          (cd assets && sha256sum "$name" > "$name.sha256" && split -b 1900M -d "$name" "$name.part" && rm "$name")
+      - uses: actions/upload-artifact@v4
+        with:
+          name: iso-${{ matrix.variant }}
+          path: assets/*
+          compression-level: 0
+          retention-days: 1
+
+  publish:
+    needs: [info, iso]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: assets
+          merge-multiple: true
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PRERELEASE: ${{ needs.info.outputs.prerelease }}
+        run: |
+          flags=(--generate-notes --verify-tag --title "$GITHUB_REF_NAME")
+          [ "$PRERELEASE" = false ] || flags+=(--prerelease --latest=false)
+          gh release create "$GITHUB_REF_NAME" "${flags[@]}" assets/*
