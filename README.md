@@ -120,8 +120,11 @@ you no longer need to roll back to them.
 Run these on the hardware, and treat a failure as a repo bug:
 
 - `sudo halogenctl doctor` passes, and `cat /proc/cmdline` shows the GTT settings and `iommu=pt`.
-- `ls -lZ /dev/accel/accel0` shows group `render` and type `dri_device_t`.
-- `mokutil --sb-state` reports Secure Boot enabled, if you left it on.
+- `ls -l /dev/kfd /dev/dri/renderD*` shows group `halogen`, and `ls -lZ /dev/accel/accel0`
+  shows group `halogen` and type `dri_device_t`.
+- With Secure Boot on, the kernel runs in lockdown. Confirm `halogen-fabric-clock status` holds
+  the clock and that GPU and NPU requests work.
+- `bootctl status` reports Secure Boot enabled, if you left it on.
 - `systemctl --failed` is clean. Upstream warns `systemd-remount-fs.service` can fail on
   Anaconda-installed bootc systems.
 - `sudo ausearch -m avc -ts boot` is empty. If `/dev/kfd` shows `denied { map }`, run

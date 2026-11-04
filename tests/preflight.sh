@@ -21,3 +21,4 @@ touch "$work/dev/accel/accel0"
 printf '#!/bin/sh\nexit 1\n' > "$work/clock"; expect_fail "an unheld fabric clock"
 printf '#!/bin/sh\nexit 0\n' > "$work/clock"
 HALOGEN_MEMLOCK=8192 expect_fail "limited memlock"
+if [ "$(id -u)" != 0 ]; then chmod 000 "$work/dev/kfd"; expect_fail "a GPU node it cannot open"; chmod 644 "$work/dev/kfd"; fi
