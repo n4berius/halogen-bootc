@@ -14,6 +14,7 @@ RUN dnf -y install \
 
 RUN mkdir -p /boot/efi && cp -ra /usr/lib/efi/*/*/EFI /boot/efi
 
+COPY installer/buildstamp /.buildstamp
 COPY installer/iso.yaml /usr/lib/image-builder/bootc/iso.yaml
 COPY installer/anaconda/10-halogen.conf /etc/anaconda/conf.d/10-halogen.conf
 COPY installer/anaconda/interactive-defaults.ks /usr/share/anaconda/interactive-defaults.ks

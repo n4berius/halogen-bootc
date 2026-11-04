@@ -31,6 +31,8 @@ s = socket.socket(socket.AF_UNIX); s.connect(sys.argv[1]); s.send(sys.stdin.buff
   if echo "$text" | grep -qiE 'welcome to|installation summary|installation destination'; then reached=1; break; fi
 done
 
+echo "=== Secure Boot messages ==="
+grep -aiE 'secure ?boot|lockdown' "$out/serial.log" | cut -c1-160 || true
 echo "=== serial log ==="
 tail -n 80 "$out/serial.log" | cut -c1-200
 [ "$reached" = 1 ] || { echo "the installer did not appear" >&2; exit 1; }
