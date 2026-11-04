@@ -21,14 +21,20 @@ Monday, the newest stable release is rebuilt with Fedora updates.
 
 ## Cut a release
 
+On GitHub, open **Actions > Release > Run workflow**. Keep the branch as `main`, enter the tag,
+such as `v0.18.23-alpha.1`, and choose **Run workflow**. Do not use **Draft a new release**,
+because the workflow creates the release itself.
+
+You can also push a tag from your own computer:
+
 ```bash
 git checkout main && git pull
 git tag v0.18.23-alpha.1
 git push origin v0.18.23-alpha.1
 ```
 
-The tag triggers checks, both images, a full VM install of each ISO, and then the GitHub
-release. Nothing is published as a release unless both installs pass, but the images are
+Either way, the workflow runs checks, builds both images, runs a full VM install of each ISO, and
+then creates the GitHub release. Nothing is published as a release unless both installs pass, but the images are
 pushed before the ISO tests run. If a run fails, fix it on `main` and cut the next number.
 
 ## Move to a new Halogen version
