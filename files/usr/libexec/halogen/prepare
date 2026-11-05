@@ -5,6 +5,12 @@ models=/var/srv/models
 configs=/var/srv/configs
 
 install -d -o halogen -g halogen -m 0750 "$models" "$configs" /var/lib/halogen
+# shellcheck source=/dev/null
+. /usr/share/halogen/release.env
+if [ "$HALOGEN_VARIANT" = npu ]; then
+  # Halogen's NPU models, and folders for your own checkpoints (halogenctl model pull).
+  install -d -o halogen -g halogen -m 0750 "$models/npu" "$models/decider" "$models/LFM" "$models/custom"
+fi
 
 if [ ! -e "$configs/halogen.env" ]; then
   install -o halogen -g halogen -m 0640 /usr/share/halogen/halogen.env.default "$configs/halogen.env"

@@ -186,9 +186,10 @@ sudo bootc switch ghcr.io/n4berius/halogen-flash-bootc:0.18.24
 sudo systemctl reboot
 ```
 
-To publish a new version, follow [RELEASING.md](RELEASING.md). A new version downloads its
-NPU files, about 15 GB, on its first boot. Remove old `/srv/models/npu/<version>` folders once
-you no longer need to roll back to them.
+To publish a new version, follow [RELEASING.md](RELEASING.md). NPU models are kept in one
+folder, `/srv/models/npu/<model>`, and every file is checked against the new version's record,
+so a new version downloads only the NPU files that changed. Rolling back downloads the older
+files again if they differ.
 
 ## Choices worth knowing
 

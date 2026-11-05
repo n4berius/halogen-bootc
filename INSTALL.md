@@ -202,6 +202,34 @@ Firmware updates use [fwupd](https://fwupd.org/). Check for them with
 `sudo fwupdmgr refresh && sudo fwupdmgr get-updates`, and apply them with
 `sudo fwupdmgr update`. A BIOS update reboots the machine, which stops Halogen until it is back.
 
+### Your own NPU checkpoints
+
+On the NPU edition, Halogen also runs checkpoints you supply, such as LiquidAI's `d1-2B` and
+the LFM3 family, or your own fine-tune of one of its NPU models. Halogen's
+[NPU guide](https://github.com/peonist-ai/halogen-flash-server/blob/main/docs/NPU.md#your-own-model)
+lists what runs. Download one from Hugging Face with:
+
+```bash
+sudo halogenctl model pull LiquidAI/LFM3-1.7B     # add --as <name> or --revision <commit> if you like
+sudo halogenctl model list
+sudo halogenctl model remove LFM3-1.7B
+```
+
+`model pull` uses your Hugging Face token if you saved one (gated repos need it), resumes if
+interrupted, and puts the checkpoint in the folder that fits:
+
+| Folder | What goes there | Named in `HALOGEN_NPU_MODELS` as |
+|---|---|---|
+| `/srv/models/decider` | `d1-2B`, fine-tunes of `decider-0.8b` | `/models/decider/<name>` |
+| `/srv/models/LFM` | LFM3-1.7B, LFM3-VL-2B, LFM3-Audio-2B, LFM3-Omni-2B | `/models/LFM/<name>` |
+| `/srv/models/custom` | Fine-tunes of the embedding, reranking or guard models | `/models/custom/<name>` |
+
+It then prints the line to put in `/srv/configs/halogen.env`, and offers to make the change and
+restart. Halogen serves the model under its folder's name. Its first start converts the
+checkpoint for the NPU (about a minute) and keeps the result beside it. Halogen fetches only the
+NPU programs it runs on, never the weights. These three folders are the only ones the server
+can write to.
+
 ## 8. Optional: unlock LUKS with the TPM
 
 If you chose LUKS, you can avoid typing the passphrase at each boot:

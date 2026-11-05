@@ -42,7 +42,7 @@ our docs.
 
 - Halogen runs as the rootless `halogen` user (UID 970) through a Quadlet in
   `/etc/containers/systemd/users/970/`, with linger on. `halogenctl` wraps it, so run it with
-  `sudo`.
+  `sudo`. `halogenctl model pull|list|remove` manages your own NPU checkpoints.
 - First boot: `halogen-prepare` (root) creates `/srv/models`, `/srv/configs`, `halogen.env`
   and the API key. `halogen-fetch` (user) pulls the pinned image, downloads models with `hf`
   inside that image, and runs Halogen's `verify`. Then `halogen.service` starts read-only and
@@ -50,9 +50,15 @@ our docs.
   missing or changed.
 - Settings: users edit `/srv/configs/halogen.env`. `render-config` keeps only the names in
   `options.allowed`, and `locked.env` wins over it. `halogenctl config` shows the result.
-- NPU models live in `/srv/models/npu/<halogen-version>/<model>` (#18 plans to drop the
-  version folder). Their files are checked against the hashes in the pinned image's
-  `/opt/halogen/npu/models.txt`.
+- NPU models live in `/srv/models/npu/<model>`, with no version folder. Their files are
+  checked against the hashes in the pinned image's `/opt/halogen/npu/models.txt`, so an
+  upgrade downloads only what changed. Old `npu/<version>/` folders are moved across by
+  `fetch-models`.
+- Own NPU checkpoints live in `/srv/models/{decider,LFM,custom}/<name>`, put there by
+  `halogenctl model pull` (`model-pull`, which uses Halogen's `halogen-npu probe` to pick the
+  folder). The fetch probes each path in `HALOGEN_NPU_MODELS` and fetches its NPU programs.
+  These folders are mounted writable, because Halogen keeps a conversion beside the
+  checkpoint only on a writable folder (on a read-only one it converts into /tmp at every start).
 - `/srv` is `/var/srv` on bootc. The installer makes LVM volumes for `/`, `/var`, `/var/log`,
   `/var/log/audit`, `/var/home`, `/var/srv/configs` and `/var/srv/models`.
 - Updates are manual (`bootc switch` / `upgrade`), since a reboot stops inference. Pre-release
@@ -76,7 +82,8 @@ our docs.
 - `hf` is noisy and shows no progress in the journal. `fetch-in-container` filters it, and
   `fetch-models` logs the size downloaded every minute.
 - Own NPU checkpoints (`d1-2B`, `LFM3-*`) are named by path, need NPU programs fetched, and
-  are converted at first start. This doesn't work yet (#19).
+  are converted at first start. `halogen-npu probe` may need XRT, so the fetch mounts it on
+  the NPU edition. Not yet tried on hardware.
 - ISO install tests take about 25 to 40 minutes, and a new push cancels the previous run.
   Don't push mid-run unless you mean to.
 - The OS image is flattened (`FROM scratch` + `COPY --from=os / /`) after its `dnf remove`

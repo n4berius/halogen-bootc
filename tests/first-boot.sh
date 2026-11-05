@@ -6,8 +6,16 @@ work="$(mktemp -d)"; trap 'rm -rf "$work"' EXIT
 mkdir -p "$work/bin" "$work/models" "$work/opt"
 export FAKE="$work" HELPER_SRC="$repo/files/usr/libexec/halogen/fetch-in-container"
 
-printf 'model embed repo=org/embed revision=abc\nmodel rerank repo=org/rerank revision=def devices=embed\nfile embed devices/d.hnpm 5 %s\nfile rerank rerank.hnpw 5 %s\n' \
-  "$(printf hello | sha256sum | cut -d' ' -f1)" "$(printf hello | sha256sum | cut -d' ' -f1)" > "$work/opt/models.txt"
+h="$(printf hello | sha256sum | cut -d' ' -f1)"
+cat > "$work/opt/models.txt" <<S
+model embed repo=org/embed revision=abc
+model rerank repo=org/rerank revision=def devices=embed
+model lfm3 repo=org/lfm3 revision=x
+file embed devices/d.hnpm 5 $h
+file rerank rerank.hnpw 5 $h
+file lfm3 devices/p.hnpm 5 $h
+file lfm3 lfm3.hnpw 5 $h
+S
 
 cat > "$work/bin/hf" <<'S'
 #!/bin/bash
@@ -30,11 +38,17 @@ case "$1" in
   run)
     case " $* " in
       *" verify "*) [ ! -e "$FAKE/fail-verify" ] ;;
-      *) mkdir -p "$FAKE/models/npu/9.9.9"
+      *) echo "$*" > "$FAKE/last-run"
          HALOGEN_PINS="$FAKE/opt/models.txt" HALOGEN_MODELS_ROOT="$FAKE/mount" WEIGHTS_REPO=r WEIGHTS_REVISION=main \
+         HALOGEN_NPU_BIN="$FAKE/bin/halogen-npu" \
          NPU_MODELS="$FAKE_NPU" VISION="" bash "$HELPER_SRC" ;;
     esac ;;
 esac
+S
+cat > "$work/bin/halogen-npu" <<'S'
+#!/bin/bash
+# Halogen's probe names the model a checkpoint was tuned from.
+[ "$1" = probe ] && [ -f "$2/config.json" ] && echo "task=generate base=lfm3"
 S
 chmod +x "$work/bin/"*
 ln -s "$work/models" "$work/mount"
@@ -104,3 +118,37 @@ echo 'HALOGEN_AGENT_GUARD=Hold' >> "$work/config.env"
 grep -q 'NPU_MODELS=embed,halogen-spotter-0.6b,decider-4b' "$work/podman.log" \
   || { echo "the agent guard's models were not fetched" >&2; exit 1; }
 ok "the agent guard's models are fetched when it is turned on"
+
+echo 'HALOGEN_NPU_MODELS=embed' > "$work/config.env"; export FAKE_NPU=embed
+rm -rf "$work/models/npu" "$work/models/.fetch-stamp"
+mkdir -p "$work/models/npu/9.9.9/embed/devices" "$work/models/npu/9.9.8/embed/devices" "$work/models/npu/9.9.8/old"
+printf hello > "$work/models/npu/9.9.9/embed/devices/d.hnpm"; printf stale > "$work/models/npu/9.9.8/embed/devices/d.hnpm"
+: > "$work/hf.log"
+"$work/fetch" > "$work/out" 2>&1
+[ "$(cat "$work/models/npu/embed/devices/d.hnpm")" = hello ] || { echo "the current version's copy did not win" >&2; exit 1; }
+[ -d "$work/models/npu/old" ] || { echo "a model only in an old version folder was lost" >&2; exit 1; }
+if [ -e "$work/models/npu/9.9.9" ] || [ -e "$work/models/npu/9.9.8" ]; then echo "version folders were left behind" >&2; exit 1; fi
+if grep -q org/embed "$work/hf.log"; then echo "a moved model was downloaded again" >&2; exit 1; fi
+ok "versioned NPU folders move into one folder, the current version's copy wins, and nothing is fetched again"
+
+mkdir -p "$work/models/LFM/mine"; echo '{}' > "$work/models/LFM/mine/config.json"
+echo 'HALOGEN_NPU_MODELS=embed,/models/LFM/mine:fast,/models/LFM/mine' > "$work/config.env"; export FAKE_NPU=embed,/models/LFM/mine
+: > "$work/hf.log"
+"$work/fetch" > "$work/out" 2>&1 || { cat "$work/out" >&2; exit 1; }
+[ -f "$work/models/npu/lfm3/devices/p.hnpm" ] || { echo "the checkpoint's NPU programs were not fetched" >&2; exit 1; }
+if [ -e "$work/models/npu/lfm3/lfm3.hnpw" ]; then echo "weights were fetched for your own checkpoint" >&2; exit 1; fi
+grep -q 'mine is a lfm3' "$work/out" || { echo "the fetch did not say what the checkpoint is" >&2; exit 1; }
+ok "your own checkpoint gets its NPU programs fetched, and no weights"
+
+: > "$work/podman.log"; "$work/fetch" >/dev/null 2>&1
+if grep -q ' run ' "$work/podman.log"; then echo "an unchanged checkpoint ran the fetch again" >&2; exit 1; fi
+echo '{"changed": 1}' > "$work/models/LFM/mine/config.json"
+"$work/fetch" >/dev/null 2>&1
+grep -q ' run ' "$work/podman.log" || { echo "a changed checkpoint was not checked again" >&2; exit 1; }
+ok "a changed checkpoint is checked again"
+
+echo 'HALOGEN_NPU_MODELS=/models/LFM/missing' > "$work/config.env"; export FAKE_NPU=/models/LFM/missing
+if "$work/fetch" > "$work/out" 2>&1; then echo "a missing checkpoint folder was accepted" >&2; exit 1; fi
+grep -q 'not a checkpoint folder' "$work/out" || { echo "a missing checkpoint folder was not explained" >&2; exit 1; }
+grep -q 'fix /srv/configs/halogen.env' "$work/out" || { echo "the fetch did not say what to fix" >&2; exit 1; }
+ok "a missing checkpoint folder is explained and not retried forever"
