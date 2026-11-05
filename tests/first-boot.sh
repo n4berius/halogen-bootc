@@ -101,5 +101,6 @@ ok "too little disk stops before downloading"
 echo 'HALOGEN_NPU_MODELS=embed' > "$work/config.env"; echo HALOGEN_AGENT_GUARD >> "$work/allowed"
 echo 'HALOGEN_AGENT_GUARD=Hold' >> "$work/config.env"
 "$work/fetch" > "$work/out" 2>&1 || true
-grep -q 'halogen-spotter-0.6b' "$work/out" && grep -q 'decider-4b' "$work/out"
+grep -q 'NPU_MODELS=embed,halogen-spotter-0.6b,decider-4b' "$work/podman.log" \
+  || { echo "the agent guard's models were not fetched" >&2; exit 1; }
 ok "the agent guard's models are fetched when it is turned on"

@@ -166,7 +166,7 @@ sudo halogenctl hf-token     # save a Hugging Face token for faster model downlo
 `tail` or `grep`, or saved to a file, they print and stop.
 
 Clients use `http://<host>:8731/v1` with `Authorization: Bearer <api-key>`. The API listens on
-IPv4.
+IPv4 and IPv6.
 
 ## Upgrade and roll back
 
