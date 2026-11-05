@@ -1,7 +1,9 @@
 """Log in at a VM console through the QEMU monitor and capture a report on serial.
 
-Usage: vm-login.py monitor.sock serial.log out-dir [plain|luks|luks-enroll|tpm]
-  luks         type the disk passphrase when asked
+Usage: vm-login.py monitor.sock serial.log out-dir [plain|luks|luks-stale|luks-enroll|tpm]
+  luks         type the disk passphrase, which must be asked for
+  luks-stale   as luks, then enroll the TPM against a changed PCR 7 (as if the Secure Boot
+               state later changed) and power off, leaving a binding that won't unlock
   luks-enroll  as luks, then bind the disk to the TPM with halogen-enroll-tpm and power off
   tpm          fail if the passphrase is asked for: the TPM must unlock the disk by itself
 """
@@ -9,12 +11,15 @@ import pathlib, re, socket, subprocess, sys, time
 
 sock_path, serial, out = sys.argv[1:4]
 mode = sys.argv[4] if len(sys.argv) > 4 and sys.argv[4] else "plain"
-luks = mode in ("luks", "luks-enroll")
+luks = mode in ("luks", "luks-stale", "luks-enroll")
+asked = False
 serial, out = pathlib.Path(serial), pathlib.Path(out)
 KEYS = {" ": "spc", "-": "minus", "=": "equal", ".": "dot", "/": "slash", ";": "semicolon",
-        ",": "comma", "'": "apostrophe", "\n": "ret"}
+        ",": "comma", "'": "apostrophe", "\n": "ret",
+        "[": "bracket_left", "]": "bracket_right", "\\": "backslash"}
 SHIFT = {"_": "minus", "|": "backslash", ">": "dot", "{": "bracket_left", "}": "bracket_right",
-         "&": "7", "*": "8", "(": "9", ")": "0", "$": "4", "?": "slash", '"': "apostrophe"}
+         "&": "7", "*": "8", "(": "9", ")": "0", "$": "4", "?": "slash", '"': "apostrophe", "!": "1",
+         "@": "2", "#": "3", ":": "semicolon", "+": "equal", "<": "comma"}
 
 time.sleep(5)
 mon = socket.socket(socket.AF_UNIX)
@@ -45,12 +50,15 @@ while time.time() < deadline:
     if luks and "passphrase" in text.lower():
         typed("halogentest\n")
         luks = False
+        asked = True
         continue
     if "login:" in text:
         break
 else:
     print(text)
     sys.exit("no login prompt appeared")
+if mode in ("luks", "luks-stale", "luks-enroll") and not asked:
+    sys.exit("the disk was expected to ask for its passphrase, but it did not")
 
 typed("root\n"); time.sleep(3)
 typed("halogentest\n"); time.sleep(5)
@@ -78,12 +86,22 @@ log = wait_serial("RESULT-END", 300)
 report = log.split("RESULT-START")[-1].split("RESULT-END")[0]
 (out / "report.txt").write_text(re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", report))
 
-if mode == "luks-enroll":
+if mode in ("luks-stale", "luks-enroll"):
     # Exactly what INSTALL.md tells people to run; PASSWORD answers the passphrase prompt.
-    typed("PASSWORD=halogentest halogen-enroll-tpm > /dev/ttyS0 2>&1; echo ENROLL-RC=$? > /dev/ttyS0\n")
+    # For a stale binding, PCR 7 is first extended so the TPM records a value the next boot
+    # won't reproduce, like a BIOS or Secure Boot change after enrolling.
+    # pcrextend skips non-UKI boots unless told to measure; then check PCR 7 really moved.
+    stale = ("before=$(cat /sys/class/tpm/tpm0/pcr-sha256/7) && "
+             "SYSTEMD_FORCE_MEASURE=1 /usr/lib/systemd/systemd-pcrextend --pcr=7 halogen-test-stale && "
+             "[ \"$(cat /sys/class/tpm/tpm0/pcr-sha256/7)\" != \"$before\" ] && echo PCR7-CHANGED && "
+             if mode == "luks-stale" else "")
+    typed("{ " + stale + "PASSWORD=halogentest halogen-enroll-tpm; } "
+          "> /dev/ttyS0 2>&1; echo ENROLL-RC=$? > /dev/ttyS0\n")
     log = wait_serial("ENROLL-RC=", 120)
     tail = log.split("RESULT-END")[-1]
     print(tail)
+    if mode == "luks-stale" and "PCR7-CHANGED" not in tail:
+        sys.exit("PCR 7 could not be changed, so the stale-binding test would prove nothing")
     if "ENROLL-RC=0" not in tail:
         sys.exit("halogen-enroll-tpm failed")
     typed("systemctl poweroff\n")
