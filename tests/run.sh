@@ -10,4 +10,5 @@ tests/first-boot.sh
 tests/preflight.sh
 tests/halogen-update.sh
 tests/model-pull.sh
+tests/selftest.sh
 echo "all checks passed"

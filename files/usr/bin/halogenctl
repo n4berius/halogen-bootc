@@ -26,6 +26,11 @@ case "${1:-status}" in
     echo "--- locked ---"
     grep -v '^#' /usr/share/halogen/locked.env
     ;;
+  selftest)
+    # The beta checklist in one go. It changes nothing and prints nothing private.
+    [ "$(id -u)" = 0 ] || { echo "Run it with sudo: sudo halogenctl selftest" >&2; exit 1; }
+    exec /usr/libexec/halogen/selftest
+    ;;
   api-key) cat /srv/configs/api-key; echo ;;
   hf-token)
     # Store a Hugging Face read token for model downloads. It is never printed.
@@ -105,5 +110,5 @@ case "${1:-status}" in
       *) echo "usage: halogenctl model pull <hf-repo> [--revision <rev>] [--as <name>] | list | remove <name>" >&2; exit 2 ;;
     esac
     ;;
-  *) echo "usage: halogenctl status|start|stop|restart|logs [lines]|fetch-logs [lines]|doctor|config|api-key|hf-token [--remove]|model pull|list|remove" >&2; exit 2 ;;
+  *) echo "usage: halogenctl status|start|stop|restart|logs [lines]|fetch-logs [lines]|doctor|selftest|config|api-key|hf-token [--remove]|model pull|list|remove" >&2; exit 2 ;;
 esac
