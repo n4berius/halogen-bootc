@@ -1,0 +1,9 @@
+#!/bin/bash
+# Exit 0 when / in fstab lacks the "ro" option, so bootc-fstab-edit.service still has work to do.
+# bootc 1.17 rewrites /etc/fstab at every boot even when / already has ro (bootc-dev/bootc#2592),
+# which makes every later mount warn "your fstab has been modified". Skipping the service then
+# avoids that; on a fresh Anaconda install / lacks ro, so the service still runs once.
+fstab="${1:-/etc/fstab}"
+[ -r "$fstab" ] || exit 0
+awk '$1 !~ /^#/ && $2 == "/" { n = split($4, o, ","); for (i = 1; i <= n; i++) if (o[i] == "ro") found = 1 }
+     END { exit found ? 1 : 0 }' "$fstab"

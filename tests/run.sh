@@ -9,6 +9,7 @@ tests/channels.sh
 tests/next-tag.sh
 tests/needs-build.sh
 tests/first-boot.sh
+tests/fstab.sh
 tests/preflight.sh
 tests/halogen-update.sh
 tests/model-pull.sh

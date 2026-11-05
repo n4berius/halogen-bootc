@@ -112,4 +112,6 @@ if [ -n "$luks" ]; then
   echo "TPM unlock verified"
   cat "$out/selftest.txt"
   grep -q '^PASS luks-tpm:' "$out/selftest.txt" || { echo "selftest did not see the TPM unlock" >&2; exit 1; }
+  # By the third boot / has ro in fstab, so bootc's fstab edit must be skipped (bootc-dev/bootc#2592).
+  grep -qi "skipped due to 'exec-condition'" "$out/report.txt" || { echo "bootc-fstab-edit still rewrote fstab" >&2; exit 1; }
 fi
