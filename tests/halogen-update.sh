@@ -29,6 +29,9 @@ g -C "$up" commit -qam two && g -C "$up" tag v9.1.0 && g -C "$up" tag v9.2.0-rc.
 here="$work/here"
 mkdir -p "$here"
 cp -r "$repo/scripts" "$repo/variants" "$repo/versions.env" "$here/"
+# Its own starting option lists, so the result does not depend on this checkout's (the update
+# workflow runs this test after it has already regenerated them).
+for e in npu no-npu; do echo HALOGEN_TEMPERATURE > "$here/variants/$e/usr/share/halogen/options.allowed"; done
 sed -i -e 's/^HALOGEN_VERSION=.*/HALOGEN_VERSION=9.0.0/' \
   -e "s/^HALOGEN_SOURCE_COMMIT=.*/HALOGEN_SOURCE_COMMIT=$(g -C "$up" rev-parse v9.0.0)/" "$here/versions.env"
 g -C "$here" init -q && g -C "$here" add -A && g -C "$here" commit -qm base
