@@ -44,6 +44,8 @@ assert "@sha256" not in q and "Image=@HALOGEN_IMAGE@" in q
 for lib in ("libxrt_coreutil", "libxrt_core", "libxrt_driver_xdna"):
     assert len(re.findall(rf"^Volume=/usr/lib/halogen/xrt/{lib}\.so\.2:", n, re.M)) == 3, lib
 xml.dom.minidom.parse("files/usr/lib/firewalld/services/halogen.xml")
+pins = dict(l.strip().split("=", 1) for l in open("versions.env") if "=" in l and not l.startswith("#"))
+assert re.fullmatch(r"[0-9a-f]{40}", pins["HALOGEN_WEIGHTS_REVISION"]), "HALOGEN_WEIGHTS_REVISION must be a commit, not a branch"
 print("static checks ok")
 P
 python3 -c "import glob, yaml; [yaml.safe_load(open(f)) for f in glob.glob('.github/**/*.yml', recursive=True)]"

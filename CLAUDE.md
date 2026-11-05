@@ -101,7 +101,8 @@ Open issues and the **beta** milestone are the source of truth, prioritised with
 
 - PR #22 (draft) adds `scripts/size-report.sh` to the ISO workflow. Its artifacts
   (`size-report-npu` / `size-report-no-npu`) drive trimming for #26.
-- #23 waits for the weights commit hash freyja downloaded:
+- #23: the weights are pinned to a commit (`HALOGEN_WEIGHTS_REVISION`). Freyja can confirm
+  its copy matches with
   `sudo head -n1 /srv/models/.cache/huggingface/download/qwen38-flash-next-v2.hgn.metadata`.
 - #24: build the Halogen update workflow, then let it open the 0.19.0 update PR. The
   changelog notes are on the issue.
