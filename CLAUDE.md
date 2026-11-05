@@ -35,6 +35,7 @@ our docs.
 | `variants/npu`, `variants/no-npu` | Per-edition kernel arguments, Quadlet drop-ins, the allowed-options list and default `halogen.env` |
 | `scripts/` | `build.sh`, `build-iso.sh`, `package-iso.sh` (single-file release ISO), `release-info.sh`, `gen-options.py` (options from upstream `FLAGS.md`), `halogen-update.sh` (pins a new Halogen release), `size-report.sh` |
 | `tests/` | `run.sh` (fast checks, no GPU or network), `iso-install.sh` + `vm-login.py` (QEMU install test) |
+| `.claude/agents/` | Subagents: `code-reviewer` (QA review before merge) and `security-auditor` (audit, zero-cost hardening ideas). Both only read and report |
 | `.github/workflows/` | `build.yml` (image, edge tag), `iso.yml` (ISO + VM install test), `release.yml`, `refresh.yml` (weekly rebuild of stable), `halogen-update.yml` (daily: opens a PR for a new Halogen release) |
 
 ## How the running system works
@@ -101,3 +102,8 @@ The owner's test machine is "freyja": an AMD Ryzen AI Halo Developer Platform (1
 
 Use plain, specific messages that explain why. PR descriptions have a summary and a test plan
 with checkboxes, and say whether real hardware was involved.
+
+Before asking the owner to merge a PR, run the `code-reviewer` subagent on it and fix or answer
+what it finds. Run `security-auditor` too when the change touches services, permissions, the
+firewall, containers, secrets, the installer or LUKS/TPM. Hardening it suggests goes in its own
+PR, only once the owner agrees.
