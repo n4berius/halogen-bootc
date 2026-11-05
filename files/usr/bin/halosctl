@@ -23,10 +23,15 @@ U
 }
 
 die() { echo "halosctl: $*" >&2; exit 1; }
+case "${1:-}" in help|-h|--help) usage; exit 0 ;; esac
 [ "$(id -u)" = 0 ] || die "run it with sudo"
 
+# bootc's status, read once per state (load again after a change). The helpers below run in
+# $(...) subshells, so the cache must be filled here, in the main shell.
 status_json=""
-status() { [ -n "$status_json" ] || status_json="$(bootc status --format=json --format-version=1)"; printf '%s' "$status_json"; }
+load() { status_json="$(bootc status --format=json --format-version=1)"; }
+status() { printf '%s' "$status_json"; }
+queued() { [ "$(status | jq -r '.status.rollbackQueued // false')" = true ]; }
 # Field of a deployment (booted, staged or rollback): ref, version, digest or timestamp.
 # Printable characters only: the version comes from the image's label.
 field() {
@@ -43,7 +48,7 @@ repo() {
 }
 # The channel the booted image follows, or empty when it is pinned to one exact release.
 channel() {
-  local t; t="$(booted_ref)"; t="${t##*/}"
+  local t; t="$(field "${1:-booted}" ref)"; t="${t##*/}"
   case "$t" in *:*) t="${t##*:}" ;; *) return 0 ;; esac
   t="${t%-no-npu}"
   case "$t" in alpha|beta|rc|stable|edge) echo "$t" ;; latest) echo stable ;; esac
@@ -94,7 +99,7 @@ switch_to() {
   echo "After: $target (${info#* })"
   confirm "Switch to it?"
   if [ -n "$pin" ]; then bootc switch "$(repo)@$digest"; else bootc switch "$target"; fi
-  status_json=""
+  load
   staged="$(describe staged || echo "$target (${info#* })")"
   if [ -n "$(field staged digest)" ] && [ "$(field staged digest)" != "$digest" ]; then
     echo "Note: the image changed in the registry just now; staged instead: $staged"
@@ -104,6 +109,7 @@ switch_to() {
 }
 
 cmd="${1:-version}"; [ $# = 0 ] || shift
+[ "$cmd" = history ] || load
 args=()
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -118,6 +124,8 @@ while [ $# -gt 0 ]; do
   shift
 done
 
+[ "$cmd" = switch ] || [ "${#args[@]}" = 0 ] || die "unexpected ${args[0]} (for an older release: halosctl rollback --to <version>)"
+
 case "$cmd" in
   version)
     ch="$(channel)"
@@ -128,17 +136,20 @@ case "$cmd" in
     echo "Image:     $(booted_ref)"
     echo "Digest:    $(field booted digest)"
     echo "Built:     $(field booted timestamp)"
-    echo "Next boot: $(describe staged || echo "no change staged")"
+    if queued; then echo "Next boot: $(describe rollback) (rollback queued)"
+    else echo "Next boot: $(describe staged || echo "no change staged")"; fi
     echo "Rollback:  $(describe rollback || echo "none")"
     ;;
   upgrade)
     [ -n "$(channel)" ] || echo "Note: this machine is pinned to one release, so an upgrade finds nothing newer. To follow new releases: sudo halosctl switch <channel>"
-    if [ "$check" = 1 ]; then bootc upgrade --check; exit 0; fi
+    bootc upgrade --check
+    [ "$check" = 0 ] || exit 0
     from="$(describe booted)"; before="$(field staged digest)"
+    echo "Now:   $from"
+    confirm "Download and stage the newest release on this channel?"
     bootc upgrade
-    after="$(status_json=""; field staged digest)"
+    load; after="$(field staged digest)"
     if [ -z "$after" ] || [ "$after" = "$before" ]; then echo "No new update was staged."; exit 0; fi
-    status_json=""
     record upgrade "$from" "$(describe staged)"
     # ISO times sort as text. An older build means the channel moved back; say so before a reboot.
     if [[ "$(field staged timestamp)" < "$(field booted timestamp)" ]]; then
@@ -154,7 +165,9 @@ case "$cmd" in
       release|stable|latest) ch=stable ;;
       *) die "unknown channel ${args[0]}: use alpha, beta, rc, release or edge" ;;
     esac
-    [ "$ch" != "$(channel)" ] || { echo "Already on $ch. For its newest release: sudo halosctl upgrade"; exit 0; }
+    # Compared with what boots next: a staged switch to another channel can be undone this way.
+    next=booted; [ -z "$(field staged ref)" ] || next=staged
+    [ "$ch" != "$(channel "$next")" ] || { echo "Already on $ch. For its newest release: sudo halosctl upgrade"; exit 0; }
     switch_to switch "$(repo):$ch$suffix"
     ;;
   rollback)
@@ -164,10 +177,13 @@ case "$cmd" in
       switch_to rollback "$(repo):$to$suffix" pin
       exit 0
     fi
+    ! queued || die "a rollback is already queued. Reboot to apply it (sudo systemctl reboot), or undo it with: sudo bootc rollback"
     target="$(describe rollback)" || die "there is no previous image to go back to. Older releases: sudo halosctl history, then halosctl rollback --to <version>"
     from="$(describe booted)"
     echo "Now:   $from"
     echo "After: $target"
+    staged="$(describe staged || true)"
+    [ -z "$staged" ] || echo "This drops the update staged for the next boot: $staged"
     confirm "Go back to it?"
     bootc rollback
     record rollback "$from" "$target"

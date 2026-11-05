@@ -43,6 +43,7 @@ jobs:
         run: |
           eval "$(scripts/release-info.sh "$TAG" | grep '^image_tag=')"
           export IMAGE_TAG="$image_tag"
+          export HALOS_RELEASE="${TAG#v}"
           scripts/build.sh
           echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u "${{ github.actor }}" --password-stdin
           # Worked out just before pushing, with every tag so far, so a release made during
@@ -50,6 +51,8 @@ jobs:
           git fetch -q --force --tags origin
           git tag -l 'v*' > "$RUNNER_TEMP/tags"
           channels="$("$RUNNER_TEMP/channels.sh" "$TAG" "$RUNNER_TEMP/tags")"
-          echo "Moving the channels: ${channels:-none}"
+          # The newest stable release always leads at least the stable channel.
+          [ -n "$channels" ] || { echo "no channels for $TAG; nothing was pushed" >&2; exit 1; }
+          echo "Moving the channels: $channels"
           # One channel per call, which the push script of older releases also accepts.
           for channel in $channels; do scripts/push-image.sh "$channel"; done

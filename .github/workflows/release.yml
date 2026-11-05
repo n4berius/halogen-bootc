@@ -18,7 +18,6 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       tag: ${{ steps.info.outputs.tag }}
-      channel: ${{ steps.info.outputs.channel }}
       image_tag: ${{ steps.info.outputs.image_tag }}
       prerelease: ${{ steps.info.outputs.prerelease }}
     steps:
@@ -62,6 +61,7 @@ jobs:
       HALOGEN_VARIANT: ${{ matrix.variant }}
       IMAGE_TAG: ${{ needs.info.outputs.image_tag }}
       TAG: ${{ needs.info.outputs.tag }}
+      HALOS_RELEASE: ${{ needs.info.outputs.tag }}
     steps:
       - uses: actions/checkout@v7
         with:

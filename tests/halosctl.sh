@@ -25,7 +25,7 @@ f skopeo 'echo "skopeo $*" >> "$FAKE/log"; case "$*" in
   *) echo "Error: manifest unknown" >&2; exit 1 ;; esac'
 f systemctl 'echo "systemctl $*" >> "$FAKE/log"; case "$*" in *is-active*) echo "${FAKE_FETCH:-inactive}" ;; esac'
 dep() { printf '{"image":{"image":{"image":"%s","transport":"registry"},"version":"%s","timestamp":"2026-11-05T16:58:48Z","imageDigest":"%s"}}' "$@"; }
-host() { printf '{"status":{"booted":%s,"staged":%s,"rollback":%s}}' "$1" "${2:-null}" "${3:-null}"; }
+host() { printf '{"status":{"booted":%s,"staged":%s,"rollback":%s,"rollbackQueued":%s}}' "$1" "${2:-null}" "${3:-null}" "${4:-false}"; }
 host "$(dep ghcr.io/n4berius/halos-flash:0.19.0-alpha.1 0.19.0 sha256:aaa)" null \
   "$(dep ghcr.io/n4berius/halogen-flash-bootc:0.18.23-alpha.2 0.18.23 sha256:old)" > "$work/status.json"
 printf 'HALOGEN_IMAGE=img@sha256:1\nHALOGEN_VERSION=0.19.0\nHALOGEN_VARIANT=npu\n' > "$work/release.env"
@@ -61,6 +61,18 @@ if "$ctl" switch edge --yes > "$work/out" 2>&1; then echo "switched past a regis
 has '403 Forbidden' "$work/out"
 if "$ctl" rollback --to '0.19; reboot' --yes > "$work/out" 2>&1; then echo "took a bad version" >&2; exit 1; fi
 [ ! -e "$work/history" ] || { echo "history written for refused changes" >&2; exit 1; }
+FAKE_UID=1000 "$ctl" --help > "$work/out"; has '^usage: halosctl' "$work/out"
+: > "$work/log"; "$ctl" version > /dev/null
+[ "$(grep -c '^bootc status' "$work/log")" = 1 ] || { echo "bootc status was read more than once" >&2; exit 1; }
+for extra in "rollback 0.19.0-alpha.1 --yes" "upgrade now --yes" "version beta"; do
+  # shellcheck disable=SC2086
+  if "$ctl" $extra > "$work/out" 2>&1; then echo "ignored the extra word in: $extra" >&2; exit 1; fi
+  has 'unexpected' "$work/out"
+done
+: > "$work/log"
+if "$ctl" upgrade --reboot < /dev/null > "$work/out" 2>&1; then echo "upgraded without confirming" >&2; exit 1; fi
+hasnt '^bootc upgrade$' "$work/log"; hasnt 'systemctl reboot' "$work/log"
+ok "help needs no root, bootc status is read once, extra words are refused, upgrade asks first"
 ok "it needs root, a confirmation, a known channel and an image that exists, and shows registry errors"
 
 "$ctl" switch beta --yes > "$work/out"
@@ -80,19 +92,32 @@ sed -i 's/=npu/=no-npu/' "$work/release.env"
 "$ctl" switch release --yes --reboot > "$work/out"
 has '^bootc switch ghcr.io/n4berius/halos-flash:stable-no-npu$' "$work/log"; has '^systemctl reboot$' "$work/log"
 : > "$work/log"
+cp "$work/base.json" "$work/status.json"
 FAKE_FETCH=activating "$ctl" switch release --yes --reboot > "$work/out"
 has 'Not rebooting' "$work/out"; hasnt '^systemctl reboot$' "$work/log"
 sed -i 's/=no-npu/=npu/' "$work/release.env"
 cp "$work/base.json" "$work/status.json"
 ok "release means stable, the no-NPU edition keeps its suffix, and no reboot during a download"
 
+host "$(dep ghcr.io/n4berius/halos-flash:0.19.0-alpha.1 0.19.0 sha256:aaa)" null \
+  "$(dep ghcr.io/n4berius/halogen-flash-bootc:0.18.23-alpha.2 0.18.23 sha256:old)" true > "$work/status.json"
+"$ctl" version > "$work/out"; has '^Next boot: +ghcr.io/n4berius/halogen-flash-bootc:0.18.23-alpha.2 \(0.18.23\) \(rollback queued\)' "$work/out"
+: > "$work/log"
+if "$ctl" rollback --yes > "$work/out" 2>&1; then echo "a second rollback undid the first" >&2; exit 1; fi
+has 'already queued' "$work/out"; hasnt '^bootc rollback$' "$work/log"
+host "$(dep ghcr.io/n4berius/halos-flash:0.19.0-alpha.1 0.19.0 sha256:aaa)" \
+  "$(dep ghcr.io/n4berius/halos-flash:beta 0.19.0-beta.1 sha256:feed)" \
+  "$(dep ghcr.io/n4berius/halogen-flash-bootc:0.18.23-alpha.2 0.18.23 sha256:old)" > "$work/status.json"
+"$ctl" switch beta --yes > "$work/out"; has 'Already on beta' "$work/out"   # beta is staged
 "$ctl" rollback --yes > "$work/out"
+has 'drops the update staged for the next boot: ghcr.io/n4berius/halos-flash:beta' "$work/out"
 has '^bootc rollback$' "$work/log"; has 'rollback .*-> ghcr.io/n4berius/halogen-flash-bootc:0.18.23-alpha.2' "$work/history"
 "$ctl" rollback --to 0.19.0-alpha.1 --yes > "$work/out"
 has '^bootc switch ghcr.io/n4berius/halos-flash@sha256:feed$' "$work/log"; has 'pins' "$work/out"
 host "$(dep ghcr.io/n4berius/halos-flash:0.19.0-alpha.1 0.19.0 sha256:aaa)" > "$work/status.json"
 if "$ctl" rollback --yes > "$work/out" 2>&1; then echo "rolled back to nothing" >&2; exit 1; fi
 has 'no previous image' "$work/out"
+ok "a queued rollback is shown and not undone by a second one; a dropped staged update is named"
 ok "rollback goes to the previous image, --to pins an exact release by digest, and says when there is none"
 
 host "$(dep ghcr.io/n4berius/halos-flash:beta 0.19.0-beta.1 sha256:bbb)" > "$work/status.json"

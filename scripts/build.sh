@@ -8,8 +8,10 @@ cd "$(dirname "$0")/.."
 VARIANT="${HALOGEN_VARIANT:-npu}"
 TAG="$(scripts/image-ref.sh)"
 SOURCE=ghcr.io/peonist-ai/halogen-flash-server
-# The halOS release this image is: the release's tag, or <version>-dev.<commit> for other builds.
-if [ -n "${IMAGE_TAG:-}" ] && [ "$IMAGE_TAG" != edge ]; then RELEASE="$IMAGE_TAG"
+# The halOS release this image is: HALOS_RELEASE (the release's tag, such as 0.19.0-r2), else
+# the image tag, else <version>-dev.<commit> for other builds.
+if [ -n "${HALOS_RELEASE:-}" ]; then RELEASE="${HALOS_RELEASE#v}"
+elif [ -n "${IMAGE_TAG:-}" ] && [ "$IMAGE_TAG" != edge ]; then RELEASE="$IMAGE_TAG"
 else RELEASE="$HALOGEN_VERSION-dev.$(git rev-parse --short=7 HEAD 2>/dev/null || echo local)"; fi
 
 if [ -z "$HALOGEN_DIGEST" ]; then
