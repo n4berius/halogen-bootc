@@ -17,6 +17,14 @@ hf_token="${HALOGEN_HF_TOKEN_FILE:-/srv/configs/hf-token}"
 effective="$("$render")" || exit 1
 setting() { sed -n "s/^$1=//p" "$effective" | tail -n 1; }
 npu_models="$(setting HALOGEN_NPU_MODELS)"
+# The agent guard adds its two models when the server starts, so fetch them now: the server
+# itself never downloads. Same rule as Halogen's start script.
+case "$(setting HALOGEN_AGENT_GUARD | tr '[:upper:]' '[:lower:]')" in
+  watch|hold)
+    for guard in halogen-spotter-0.6b decider-4b; do
+      case ",$npu_models," in *",$guard,"*) ;; ,,) npu_models="$guard" ;; *) npu_models="$npu_models,$guard" ;; esac
+    done ;;
+esac
 vision="$(setting HALOGEN_VISION_TOWER)"
 npu_dir="$models/npu/$HALOGEN_VERSION"
 stamp="$models/.fetch-stamp"
