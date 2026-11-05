@@ -6,7 +6,7 @@ For how Halogen itself behaves, see its
 
 > halOS is in alpha. The NPU edition runs on the hardware below; anything else is
 > untested, so work through the [checks](#7-check-the-install) on your first install and
-> [report how it went](https://github.com/n4berius/halogen-bootc/issues/new?template=hardware-report.yml).
+> [report how it went](https://github.com/n4berius/halos-flash/issues/new?template=hardware-report.yml).
 
 ## Tested hardware
 
@@ -58,7 +58,7 @@ its memory either way.
 ## 3. Get the ISO
 
 Download your edition's ISO and its `.sha256` file from this repository's
-[Releases page](https://github.com/n4berius/halogen-bootc/releases). Use the `-npu` files for
+[Releases page](https://github.com/n4berius/halos-flash/releases). Use the `-npu` files for
 the NPU edition and the `-no-npu` files for the other. Alpha, beta and RC releases are
 pre-releases, and [RELEASING.md](RELEASING.md) explains each channel.
 

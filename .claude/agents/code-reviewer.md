@@ -24,7 +24,7 @@ rules and "Lessons already learned" are your checklist's backbone.
   git log --oneline origin/main..origin/<branch>
   ```
   For a PR number, find its branch with
-  `curl -s https://api.github.com/repos/n4berius/halogen-bootc/pulls/<n>`.
+  `curl -s https://api.github.com/repos/n4berius/halos-flash/pulls/<n>`.
 - Review the code as it is on that branch (`git worktree add` a scratch copy), not the
   caller's working tree.
 

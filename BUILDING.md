@@ -1,7 +1,7 @@
 # Building halOS yourself
 
 You don't need to build anything to use halOS. The ISOs on the
-[Releases page](https://github.com/n4berius/halogen-bootc/releases) and the images on GHCR
+[Releases page](https://github.com/n4berius/halos-flash/releases) and the images on GHCR
 come from the same scripts described here, run by GitHub Actions. Build it yourself if you
 want to check those builds, change the image, or keep your own copy.
 
@@ -22,8 +22,8 @@ want to check those builds, change the image, or keep your own copy.
 ## 1. Get the source
 
 ```bash
-git clone https://github.com/n4berius/halogen-bootc.git
-cd halogen-bootc
+git clone https://github.com/n4berius/halos-flash.git
+cd halos-flash
 ```
 
 To build a published release exactly, check out its tag first, for example
