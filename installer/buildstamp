@@ -1,6 +1,6 @@
 [Main]
-Product=Halogen
+Product=halOS
 Version=45
-BugURL=https://github.com/n4berius/halogen-bootc/issues
+BugURL=https://github.com/n4berius/halos-flash/issues
 IsFinal=True
 UUID=202611040000.x86_64

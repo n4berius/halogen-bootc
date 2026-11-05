@@ -7,7 +7,7 @@ cd "$(dirname "$0")/.."
 . ./versions.env
 VARIANT="${HALOGEN_VARIANT:-npu}"
 TARGET="$(scripts/image-ref.sh)"
-INSTALLER="localhost/halogen-flash-bootc-installer:$HALOGEN_VERSION-$VARIANT"
+INSTALLER="localhost/halos-flash-installer:$HALOGEN_VERSION-$VARIANT"
 mkdir -p output
 
 podman image exists "$TARGET" || { echo "build or pull $TARGET first" >&2; exit 1; }

@@ -28,15 +28,21 @@ have() { command -v "$1" > /dev/null 2>&1; }
 # Every outside command gets a time limit, so one stuck tool can't stop the report.
 run() { timeout "${HALOGEN_SELFTEST_TIMEOUT:-20}" "$@" 2>&1; }
 
-echo "Halogen self-check, $(date -u '+%Y-%m-%d %H:%M UTC')"
+echo "halOS self-check, $(date -u '+%Y-%m-%d %H:%M UTC')"
 echo "Edition: ${HALOGEN_VARIANT:-unknown}, Halogen ${HALOGEN_VERSION:-unknown}"
 echo "Board: $(cat "$sys/class/dmi/id/board_vendor" "$sys/class/dmi/id/board_name" 2>/dev/null | paste -sd' ' -), BIOS $(cat "$sys/class/dmi/id/bios_version" 2>/dev/null)"
 echo "Kernel: $(uname -r)"
+images=""
 if have bootc; then
-  out="$(run bootc status --format=humanreadable)"
-  echo "Images:"; printf '%s\n' "$out" | grep -iE 'booted|rollback|staged|image|version' | sed 's/^/  /' | head -n 8
+  images="$(run bootc status --format=humanreadable)"
+  echo "Images:"; printf '%s\n' "$images" | grep -iE 'booted|rollback|staged|image|version' | sed 's/^/  /' | head -n 8
 fi
 echo
+
+# Machines installed before the rename to halOS follow an image name that gets no new builds.
+case "$images" in
+  *halogen-flash-bootc*) say WARN image-name "this machine follows the old image name, which gets no updates. Move it once: sudo bootc switch ghcr.io/n4berius/halos-flash:<tag> (see INSTALL.md)" ;;
+esac
 
 # --- Boot and kernel
 if have mokutil; then

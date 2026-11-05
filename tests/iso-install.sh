@@ -63,7 +63,8 @@ grep -q 'Linger=yes' "$out/report.txt"
 for m in /sysroot /var /var/log /var/log/audit /var/home /var/srv/configs /var/srv/models; do
   grep -qE "^$m " "$out/report.txt" || { echo "no separate volume for $m" >&2; exit 1; }
 done
-grep -q 'halogen_' "$out/report.txt" || { echo "volume group name is not short" >&2; exit 1; }
+# Anaconda names the volume group after the installer's product name (halOS).
+grep -qi 'halos_' "$out/report.txt" || { echo "volume group name is not short" >&2; exit 1; }
 if [ -n "$luks" ]; then grep -q 'crypto_LUKS' "$out/report.txt"; fi
 grep -q 'halogen-fetch:' "$out/report.txt"
 echo "installed system verified"

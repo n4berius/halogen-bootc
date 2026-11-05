@@ -19,7 +19,7 @@ case "$HALOGEN_DIGEST" in
 esac
 
 podman build --pull=newer -t "$TAG" \
-  --label "org.opencontainers.image.source=https://github.com/n4berius/halogen-bootc" \
+  --label "org.opencontainers.image.source=https://github.com/n4berius/halos-flash" \
   --label "org.opencontainers.image.version=$HALOGEN_VERSION" \
   --build-arg "FEDORA_BOOTC_IMAGE=$FEDORA_BOOTC_IMAGE" \
   --build-arg "DEBIAN_IMAGE=$DEBIAN_IMAGE" \

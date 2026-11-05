@@ -1,6 +1,6 @@
 # Notes for Claude Code
 
-halogen-bootc is a Fedora 45 bootc OS image, plus an Anaconda USB installer, for one job:
+halOS (formerly halogen-bootc) is a Fedora 45 bootc OS image, plus an Anaconda USB installer, for one job:
 running [halogen-flash-server](https://github.com/peonist-ai/halogen-flash-server) ("Halogen")
 on a dedicated AMD Strix Halo 128 GB server. It configures and deploys Halogen. It never
 modifies Halogen itself, which is closed source under Peonist's EULA.
@@ -10,6 +10,12 @@ requests focused, and say what was and wasn't tested. Halogen's
 [official docs](https://github.com/peonist-ai/halogen-flash-server/tree/main/docs) are the
 authority on its settings and behaviour. Read them instead of guessing, and link to them in
 our docs.
+
+Naming: the project is **halOS** in prose and the installer, and `halos-flash` where a name
+must be lowercase (the image `ghcr.io/n4berius/halos-flash`, ISO and asset names). Names that
+refer to Halogen the server stay: `halogenctl`, the `halogen` user, `/srv/models`, the
+`HALOGEN_*` settings. Peonist's trademark policy doesn't allow "halogen" in our product's
+name, but allows saying halOS runs Halogen.
 
 ## Ground rules
 

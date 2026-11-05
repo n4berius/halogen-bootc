@@ -1,12 +1,17 @@
-# halogen-bootc
+# halOS
 
-Purpose-built operating system that runs halogen.
+A purpose-built operating system that runs Halogen.
 
 It is an image-based Fedora 45 appliance for one 128 GB AMD Strix Halo machine. It installs
 from USB, boots with Secure Boot on, and runs
 [halogen-flash-server](https://github.com/peonist-ai/halogen-flash-server) pinned to one
 release, with or without its NPU models. The host is already configured, and there is no
 desktop after install.
+
+halOS is an independent project, formerly called halogen-bootc. It runs Peonist's
+halogen-flash-server ("Halogen") unmodified, and is not made, endorsed or supported by Peonist.
+"halogen" is a trademark of Peonist, LLC
+([trademark policy](https://github.com/peonist-ai/halogen-flash-server/blob/main/TRADEMARKS.md)).
 
 > **Status:** both editions build, install and boot in a virtual machine with Secure Boot on.
 > Neither has run on real hardware, so the GPU, NPU, model download, TPM enrollment and
@@ -83,7 +88,7 @@ download the models.
 
 | | With NPU | Without NPU |
 |---|---|---|
-| Image | `halogen-flash-bootc:0.18.23` | `halogen-flash-bootc:0.18.23-no-npu` |
+| Image | `halos-flash:0.19.0` | `halos-flash:0.19.0-no-npu` |
 | Serves | Flash and NPU models | Flash only |
 | IOMMU | `iommu=pt`, which the NPU needs | `amd_iommu=off`, for Halogen's measured 13-16% more prefill |
 | Includes | XRT, the fabric clock service | Neither |
@@ -109,7 +114,7 @@ Add `-no-npu` for the edition without the NPU.
 ## Build
 
 Images are tagged with the Halogen version they carry, for example
-`ghcr.io/n4berius/halogen-flash-bootc:0.18.23`.
+`ghcr.io/n4berius/halos-flash:0.19.0`.
 
 Pushing to `main` publishes the `edge` images, and tags publish releases. Each Monday, the
 newest stable release is rebuilt with Fedora updates. Changes to the image or installer also
@@ -182,9 +187,13 @@ sudo bootc rollback          # go back to the previous image
 Each machine stays on its Halogen version until you move it:
 
 ```bash
-sudo bootc switch ghcr.io/n4berius/halogen-flash-bootc:0.18.24
+sudo bootc switch ghcr.io/n4berius/halos-flash:0.19.1
 sudo systemctl reboot
 ```
+
+Machines installed before the rename follow the old image name,
+`ghcr.io/n4berius/halogen-flash-bootc`, which gets no new builds. Switch once to the new name
+with the tag you want, as above (add `-no-npu` on that edition).
 
 To publish a new version, follow [RELEASING.md](RELEASING.md). NPU models are kept in one
 folder, `/srv/models/npu/<model>`, and every file is checked against the new version's record,

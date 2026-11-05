@@ -1,4 +1,4 @@
-# halogen-bootc: Third-Party Notices
+# halOS: Third-Party Notices
 
 The MIT license in [`LICENSE`](LICENSE) covers only the files written for this repository.
 It does not cover the components below, which keep their own licenses. Where a component's

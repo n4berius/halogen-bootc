@@ -1,12 +1,12 @@
-# Installing halogen-bootc
+# Installing halOS
 
 This guide covers a new install from USB, from choosing an edition to a working API.
 For how Halogen itself behaves, see its
 [official documentation](https://github.com/peonist-ai/halogen-flash-server/tree/main/docs).
 
-> halogen-bootc is in alpha. The NPU edition runs on the hardware below; anything else is
+> halOS is in alpha. The NPU edition runs on the hardware below; anything else is
 > untested, so work through the [checks](#7-check-the-install) on your first install and
-> [report how it went](https://github.com/n4berius/halogen-bootc/issues/new?template=hardware-report.yml).
+> [report how it went](https://github.com/n4berius/halos-flash/issues/new?template=hardware-report.yml).
 
 ## Tested hardware
 
@@ -43,7 +43,7 @@ its memory either way.
 | Serves | Flash and NPU models | Flash only |
 | IOMMU | On, with `iommu=pt` | Off, with `amd_iommu=off` |
 | Trade-off | Slower prefill, keeps DMA protection | Halogen measured 13-16% more prefill, but DMA protection is off |
-| Image | `halogen-flash-bootc:0.18.23` | `halogen-flash-bootc:0.18.23-no-npu` |
+| Image | `halos-flash:0.19.0` | `halos-flash:0.19.0-no-npu` |
 
 ## 2. Prepare the BIOS
 
@@ -58,7 +58,7 @@ its memory either way.
 ## 3. Get the ISO
 
 Download your edition's ISO and its `.sha256` file from this repository's
-[Releases page](https://github.com/n4berius/halogen-bootc/releases). Use the `-npu` files for
+[Releases page](https://github.com/n4berius/halos-flash/releases). Use the `-npu` files for
 the NPU edition and the `-no-npu` files for the other. Alpha, beta and RC releases are
 pre-releases, and [RELEASING.md](RELEASING.md) explains each channel.
 
@@ -77,13 +77,17 @@ the limit.
 ### Moving between releases later
 
 A machine installed from a pre-release stays on that exact build, so `bootc upgrade` finds
-nothing new. To move to a newer build, switch to its tag and reboot. For example, from
-alpha.1 to alpha.2:
+nothing new. To move to a newer build, switch to its tag and reboot. For example, to
+0.19.0-alpha.2:
 
 ```bash
-sudo bootc switch ghcr.io/n4berius/halogen-flash-bootc:0.18.23-alpha.2
+sudo bootc switch ghcr.io/n4berius/halos-flash:0.19.0-alpha.2
 sudo systemctl reboot
 ```
+
+Installs from before the rename to halOS (the 0.18.23 alphas) follow
+`ghcr.io/n4berius/halogen-flash-bootc`, which gets no new builds. The same `bootc switch` to a
+`halos-flash` tag moves them over. Their files, settings and models stay as they are.
 
 Add `-no-npu` to the tag on that edition. Once a stable release is out, switch to the plain
 version tag, such as `:0.18.23`. From then on, `sudo bootc upgrade --apply` picks up Fedora
@@ -99,12 +103,12 @@ without asking:
 
 ```bash
 lsblk
-sudo dd if=halogen-flash-bootc-v0.18.23-alpha.1-npu.iso of=/dev/sdX bs=4M status=progress conv=fsync
+sudo dd if=halos-flash-v0.19.0-alpha.1-npu.iso of=/dev/sdX bs=4M status=progress conv=fsync
 ```
 
 ## 5. Run the installer
 
-1. Boot from the USB drive and choose **Install halogen-flash-bootc**.
+1. Boot from the USB drive and choose **Install halOS**.
 2. Pick your language.
 3. Under **Installation Destination**, choose the disk and keep **Automatic** storage. It
    creates LVM volumes with XFS for `/`, `/var`, `/var/log`, `/var/log/audit`, `/var/home`,

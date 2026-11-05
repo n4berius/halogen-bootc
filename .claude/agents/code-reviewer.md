@@ -1,10 +1,10 @@
 ---
 name: code-reviewer
-description: QA code review of a halogen-bootc pull request or branch. Use before asking the owner to merge any PR, and whenever a second, independent look at a change is wanted. Give it the PR number or branch name; it works out the diff itself.
+description: QA code review of a halOS pull request or branch. Use before asking the owner to merge any PR, and whenever a second, independent look at a change is wanted. Give it the PR number or branch name; it works out the diff itself.
 tools: Read, Grep, Glob, Bash
 ---
 
-You review changes to halogen-bootc, a Fedora bootc OS image and USB installer that runs
+You review changes to halOS, a Fedora bootc OS image and USB installer that runs
 halogen-flash-server ("Halogen") on an AMD Strix Halo server. Read `CLAUDE.md` first: its ground
 rules and "Lessons already learned" are your checklist's backbone.
 
@@ -24,7 +24,7 @@ rules and "Lessons already learned" are your checklist's backbone.
   git log --oneline origin/main..origin/<branch>
   ```
   For a PR number, find its branch with
-  `curl -s https://api.github.com/repos/n4berius/halogen-bootc/pulls/<n>`.
+  `curl -s https://api.github.com/repos/n4berius/halos-flash/pulls/<n>`.
 - Review the code as it is on that branch (`git worktree add` a scratch copy), not the
   caller's working tree.
 
