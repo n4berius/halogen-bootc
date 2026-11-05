@@ -58,7 +58,11 @@ git push origin v0.19.0-alpha.3
 Either way, the workflow runs checks, builds both images, runs a full VM install of each ISO, and
 then creates the GitHub release. Nothing is published as a release unless both installs pass, but the images are
 pushed before the ISO tests run. If a run fails, fix it on `main` and run it again: it takes the
-next number.
+next number. A promotion builds its old code again, so a fix on `main` doesn't reach it: cut a
+new alpha and promote that, or tick **from main**.
+
+A promotion takes the newest *published* release one step down. Check on the Releases page that
+it is the one you mean before promoting, for example that the alpha you tested is there.
 
 ## Move to a new Halogen version
 

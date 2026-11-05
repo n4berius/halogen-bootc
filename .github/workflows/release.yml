@@ -39,7 +39,7 @@ jobs:
           if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
             # Promote only what was published: a tag whose release run failed has no release.
             git tag -l 'v*' > "$RUNNER_TEMP/tags"
-            gh release list --limit 1000 --json tagName -q '.[].tagName' > "$RUNNER_TEMP/released"
+            gh release list --exclude-drafts --limit 1000 --json tagName -q '.[].tagName' > "$RUNNER_TEMP/released"
             out="$(scripts/next-tag.sh "$RELEASE" "$FROM_MAIN" "$RUNNER_TEMP/tags" "$RUNNER_TEMP/released")"
             tag="$(sed -n 's/^tag=//p' <<< "$out")"; source="$(sed -n 's/^source=//p' <<< "$out")"
             if [ "$source" = main ]; then ref="$GITHUB_SHA"; else ref="$(git rev-list -n 1 "$source")"; fi
@@ -91,14 +91,17 @@ jobs:
       HALOGEN_VARIANT: ${{ matrix.variant }}
       IMAGE_TAG: ${{ needs.info.outputs.image_tag }}
       TAG: ${{ needs.info.outputs.tag }}
-      HALOS_RELEASE: ${{ needs.info.outputs.tag }}
     steps:
       - uses: actions/checkout@v7
         with:
           ref: ${{ needs.info.outputs.tag }}
           fetch-depth: 0
       - run: tests/run.sh
-      - run: scripts/build.sh
+      - name: Build
+        # Only the build gets the release name; tests read what the image says, not the job.
+        env:
+          HALOS_RELEASE: ${{ needs.info.outputs.tag }}
+        run: scripts/build.sh
       - name: Push
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u "${{ github.actor }}" --password-stdin
