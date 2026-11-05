@@ -97,3 +97,9 @@ ok "unknown models are all named, with the valid names, and do not retry forever
 echo 'HALOGEN_NPU_MODELS=' > "$work/config.env"
 if HALOGEN_MODELS_NEEDED_GIB=999999999 "$work/fetch" >/dev/null 2>&1; then echo "low disk was accepted" >&2; exit 1; fi
 ok "too little disk stops before downloading"
+
+echo 'HALOGEN_NPU_MODELS=embed' > "$work/config.env"; echo HALOGEN_AGENT_GUARD >> "$work/allowed"
+echo 'HALOGEN_AGENT_GUARD=Hold' >> "$work/config.env"
+"$work/fetch" > "$work/out" 2>&1 || true
+grep -q 'halogen-spotter-0.6b' "$work/out" && grep -q 'decider-4b' "$work/out"
+ok "the agent guard's models are fetched when it is turned on"

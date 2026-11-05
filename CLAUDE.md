@@ -68,7 +68,10 @@ our docs.
 - In the VM test, `systemd-pcrextend` needs `SYSTEMD_FORCE_MEASURE=1` on non-UKI boots.
 - `vm-login.py` types through QEMU `sendkey`. Any new character in a typed command needs a
   key mapping, or it is silently dropped.
-- Halogen 0.18.x listens on IPv4 only, hence `PublishPort=0.0.0.0:8731`. 0.19.0 adds IPv6.
+- Halogen 0.18.x listened on IPv4 only, so we published `0.0.0.0:8731`. From 0.19.0 it listens
+  on IPv6 too, and the port is published dual-stack.
+- `HALOGEN_AGENT_GUARD=watch|hold` makes Halogen add `halogen-spotter-0.6b` and `decider-4b`
+  at start. The server never downloads, so `fetch-models` adds them to the fetch.
 - `hf` is noisy and shows no progress in the journal. `fetch-in-container` filters it, and
   `fetch-models` logs the size downloaded every minute.
 - Own NPU checkpoints (`d1-2B`, `LFM3-*`) are named by path, need NPU programs fetched, and
