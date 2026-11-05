@@ -34,7 +34,7 @@ f lsblk 'echo "/dev/nvme0n1p3 crypto_LUKS"'
 f cryptsetup 'printf "Tokens:\n  0: systemd-tpm2\n"'
 f amd-smi 'if [ -n "${FAKE_NOGPU:-}" ]; then echo "ERROR:root:Unable to detect any GPU devices"; exit 255; fi; printf "GPU: 0\n    BDF: 0000:c3:00.0\n"'
 f systemd-run 'echo "preflight: ok"'
-f bootc 'echo "Booted image: ghcr.io/n4berius/halogen-flash-bootc:9.9.9"'
+f bootc 'echo "Booted image: ghcr.io/n4berius/${FAKE_IMAGE:-halos-flash}:9.9.9"'
 f systemctl 'case "$*" in *--failed*) cat "$FAKE/failed" 2>/dev/null ;; *) echo "${FAKE_STATE:-active}" ;; esac'
 f fabric-clock 'exit 0'
 # Group, owner and label as the real image sets them.
@@ -109,3 +109,7 @@ for line in 'WARN secure-boot' 'FAIL kernel-amdgpu.gttsize' 'FAIL kernel-iommu-o
   expect "^$line"
 done
 ok "an unhealthy machine gets a FAIL or WARN for each problem"
+
+FAKE_IMAGE=halogen-flash-bootc "$selftest" > "$work/out" 2>&1 || true
+expect '^WARN image-name: .*bootc switch ghcr.io/n4berius/halos-flash'
+ok "a machine still on the old image name is told how to switch"
