@@ -59,7 +59,8 @@ grep -q 'amdgpu.gttsize=126976' "$out/report.txt"
 if [ "$variant" = npu ]; then grep -q 'iommu=pt' "$out/report.txt"; else grep -q 'amd_iommu=off' "$out/report.txt"; fi
 grep -qi 'secure boot.*enabled\|Secure Boot: enabled' "$out/report.txt"
 grep -q 'Linger=yes' "$out/report.txt"
-for m in / /var /var/log /var/log/audit /var/home /var/srv/configs /var/srv/models; do
+# bootc mounts the root volume at /sysroot; / itself is the read-only image.
+for m in /sysroot /var /var/log /var/log/audit /var/home /var/srv/configs /var/srv/models; do
   grep -qE "^$m " "$out/report.txt" || { echo "no separate volume for $m" >&2; exit 1; }
 done
 grep -q 'halogen_' "$out/report.txt" || { echo "volume group name is not short" >&2; exit 1; }
