@@ -212,6 +212,8 @@ the single folder (the 0.18.23 releases and earlier) downloads all its NPU model
   run inside Halogen's Debian 13 container, so Debian's build matches its C runtime.
 - **The NPU edition keeps the IOMMU on** because the NPU needs it, at the cost of the
   prefill gain the no-NPU edition takes.
+- **Root never logs in over SSH,** with a password or a key, even if it was allowed in the
+  installer. Log in as your admin user and use `sudo`.
 - **Halogen's script and terms are fetched at build time** and checked by hash, so this
   repo redistributes none of them. Halogen's image and weights keep their own licenses.
 

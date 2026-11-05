@@ -49,3 +49,8 @@ assert re.fullmatch(r"[0-9a-f]{40}", pins["HALOGEN_WEIGHTS_REVISION"]), "HALOGEN
 print("static checks ok")
 P
 python3 -c "import glob, yaml; [yaml.safe_load(open(f)) for f in glob.glob('.github/**/*.yml', recursive=True)]"
+
+# Root never logs in over SSH. The 00- name keeps it before the installer's 01-permitrootlogin.conf.
+f=files/etc/ssh/sshd_config.d/00-halos.conf
+grep -qx 'PermitRootLogin no' "$f" || { echo "$f must say PermitRootLogin no" >&2; exit 1; }
+echo "ok: root can't log in over SSH"
