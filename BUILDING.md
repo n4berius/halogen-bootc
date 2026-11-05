@@ -1,6 +1,6 @@
-# Building halogen-bootc yourself
+# Building halOS yourself
 
-You don't need to build anything to use halogen-bootc. The ISOs on the
+You don't need to build anything to use halOS. The ISOs on the
 [Releases page](https://github.com/n4berius/halogen-bootc/releases) and the images on GHCR
 come from the same scripts described here, run by GitHub Actions. Build it yourself if you
 want to check those builds, change the image, or keep your own copy.
@@ -46,7 +46,7 @@ sudo scripts/build.sh                          # with NPU
 sudo HALOGEN_VARIANT=no-npu scripts/build.sh   # without NPU
 ```
 
-It ends with `Built ghcr.io/n4berius/halogen-flash-bootc:0.18.23 ...`. The image now sits in
+It ends with `Built ghcr.io/n4berius/halos-flash:0.19.0 ...`. The image now sits in
 root's Podman storage. `versions.env` pins Halogen and the base image by digest, so your build
 contains the same Halogen container as the official one.
 
@@ -67,13 +67,13 @@ To package it the way releases are, as one file under GitHub's 2 GiB limit:
 
 ```bash
 sudo chown -R "$USER" output
-scripts/package-iso.sh "$(find output -name '*.iso' | head -1)" release halogen-flash-bootc.iso
+scripts/package-iso.sh "$(find output -name '*.iso' | head -1)" release halos-flash.iso
 ```
 
 ## Where updates come from
 
 The installer records which image the machine came from, and `bootc upgrade` looks there for
-updates. By default that's the official `ghcr.io/n4berius/halogen-flash-bootc`. So:
+updates. By default that's the official `ghcr.io/n4berius/halos-flash`. So:
 
 - **An unchanged build** behaves exactly like an official install and upgrades from the
   official images.
@@ -81,7 +81,7 @@ updates. By default that's the official `ghcr.io/n4berius/halogen-flash-bootc`. 
   your changes, give the image your own name and push it to a registry you control:
 
   ```bash
-  export IMAGE_NAME=ghcr.io/<you>/halogen-flash-bootc
+  export IMAGE_NAME=ghcr.io/<you>/halos-flash
   sudo -E scripts/build.sh
   sudo -E scripts/build-iso.sh
   sudo podman login ghcr.io
@@ -94,7 +94,7 @@ updates. By default that's the official `ghcr.io/n4berius/halogen-flash-bootc`. 
 You can also move a machine that's already installed to your image without reinstalling:
 
 ```bash
-sudo bootc switch ghcr.io/<you>/halogen-flash-bootc:0.18.23
+sudo bootc switch ghcr.io/<you>/halos-flash:0.19.0
 sudo systemctl reboot
 ```
 

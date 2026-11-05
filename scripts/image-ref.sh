@@ -11,4 +11,4 @@ case "${HALOGEN_VARIANT:-npu}" in
   no-npu) suffix="-no-npu" ;;
   *) echo "unknown edition: $HALOGEN_VARIANT" >&2; exit 1 ;;
 esac
-echo "${IMAGE_NAME:-ghcr.io/n4berius/halogen-flash-bootc}:${IMAGE_TAG:-$HALOGEN_VERSION}$suffix"
+echo "${IMAGE_NAME:-ghcr.io/n4berius/halos-flash}:${IMAGE_TAG:-$HALOGEN_VERSION}$suffix"

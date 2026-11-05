@@ -6,7 +6,7 @@ cd "$(dirname "$0")/.."
 # shellcheck source=versions.env
 . ./versions.env
 os="$(scripts/image-ref.sh)"
-installer="localhost/halogen-flash-bootc-installer:$HALOGEN_VERSION-${HALOGEN_VARIANT:-npu}"
+installer="localhost/halos-flash-installer:$HALOGEN_VERSION-${HALOGEN_VARIANT:-npu}"
 iso="${1:-}"
 
 inspect() {

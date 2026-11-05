@@ -1,7 +1,7 @@
-label: "halogen-flash-bootc"
+label: "halos-flash"
 grub2:
   timeout: 5
   entries:
-    - name: "Install halogen-flash-bootc (@EDITION@)"
+    - name: "Install halOS (@EDITION@)"
       linux: ${kernelpath} ${root} inst.graphical console=ttyS0 console=tty0
       initrd: ${initrdpath}

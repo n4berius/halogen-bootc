@@ -1,5 +1,5 @@
 [Main]
-Product=Halogen
+Product=halOS
 Version=45
 BugURL=https://github.com/n4berius/halogen-bootc/issues
 IsFinal=True
