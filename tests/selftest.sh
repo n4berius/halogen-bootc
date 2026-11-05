@@ -114,7 +114,12 @@ ok "an unhealthy machine gets a FAIL or WARN for each problem"
 rm "$work/failed"
 for wait in FAKE_JOB=42 FAKE_FETCH=activating; do
   env FAKE_STATE=inactive "$wait" "$selftest" > "$work/out" 2>&1 || true
-  expect '^WARN server:.*waiting'; refuse '^FAIL server'
+  expect '^WARN server:.*waiting.*fetch-logs'; refuse '^FAIL (server|api-)'
 done
-refuse '^FAIL api-'
-ok "just after boot, Halogen waiting for the fetch is a warning, not a failure"
+FAKE_STATE=inactive FAKE_JOB='Failed to connect to bus' "$selftest" > "$work/out" 2>&1 || true
+expect '^FAIL server:.*halogenctl start'
+FAKE_STATE=inactive FAKE_FETCH=failed "$selftest" > "$work/out" 2>&1 || true
+expect '^FAIL server:.*download and check step failed.*fetch-logs'
+FAKE_STATE=deactivating "$selftest" > "$work/out" 2>&1 || true
+expect '^WARN server:.*deactivating'
+ok "Halogen waiting for the fetch, or stopping, is a warning; a failed fetch or a stopped Halogen says what to do"

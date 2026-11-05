@@ -33,8 +33,8 @@ ARG HALOGEN_WEIGHTS_REPO
 ARG HALOGEN_WEIGHTS_REVISION
 
 # A headless AMD server: AMD GPU, NPU and CPU firmware, the network firmware Strix Halo boards
-# use (Realtek, MediaTek, Qualcomm), the Wi-Fi channel rules (wireless-regdb, which its Wi-Fi
-# driver asks for at boot) and a few admin tools. fwupd stays for firmware updates.
+# use (Realtek, MediaTek, Qualcomm), the Wi-Fi channel rules (wireless-regdb, small, with iw;
+# the Wi-Fi driver asks for them at boot) and a few admin tools. fwupd stays for firmware updates.
 RUN dnf -y --setopt=install_weak_deps=False install \
       amd-gpu-firmware firewalld linux-firmware tpm2-tss \
       amdsmi nvtop htop pciutils usbutils tmux wireless-regdb && \
