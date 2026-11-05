@@ -1,0 +1,68 @@
+name: Halogen update
+# Opens a pull request when halogen-flash-server publishes a newer release.
+# Merging and releasing stay a person's decision.
+on:
+  schedule:
+    - cron: "41 5 * * *"
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Halogen version, such as 0.19.0. Empty means the newest release
+        required: false
+        type: string
+
+concurrency:
+  group: ${{ github.workflow }}
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+
+jobs:
+  update:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: main
+      - name: Fetch upstream
+        run: git clone -q --filter=blob:none --no-checkout https://github.com/peonist-ai/halogen-flash-server "$RUNNER_TEMP/upstream"
+      - name: Update the pins
+        id: update
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          scripts/halogen-update.sh "$RUNNER_TEMP/upstream" "$RUNNER_TEMP/body.md" "$VERSION"
+          if git diff --quiet; then
+            echo "Already on the newest Halogen release." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          . ./versions.env
+          echo "version=$HALOGEN_VERSION" >> "$GITHUB_OUTPUT"
+          echo "branch=halogen-update/$HALOGEN_VERSION" >> "$GITHUB_OUTPUT"
+      - name: Check the new pins
+        if: steps.update.outputs.version != ''
+        run: tests/run.sh
+      - name: Open the pull request
+        if: steps.update.outputs.version != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.update.outputs.version }}
+          BRANCH: ${{ steps.update.outputs.branch }}
+        run: |
+          if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null; then
+            echo "$BRANCH already exists, so its pull request is already open or was closed on purpose." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$BRANCH"
+          git commit -qam "Move to Halogen $VERSION" -m "Pins, upstream hashes and options from halogen-flash-server $VERSION, by the Halogen update workflow."
+          git push -q origin "$BRANCH"
+          url="$(gh pr create --base main --head "$BRANCH" --title "Move to Halogen $VERSION" --body-file "$RUNNER_TEMP/body.md")"
+          echo "Opened $url" >> "$GITHUB_STEP_SUMMARY"
+          # A pull request opened with this workflow's token starts no workflows by itself,
+          # so start the image build and the install test on its branch.
+          gh workflow run build.yml --ref "$BRANCH"
+          gh workflow run iso.yml --ref "$BRANCH"

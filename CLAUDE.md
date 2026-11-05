@@ -33,9 +33,9 @@ our docs.
 | `Containerfile.installer`, `installer/` | The live installer image, Anaconda defaults (storage layout), branding and boot menu |
 | `files/` | Copied into both editions: systemd units, `halogenctl`, `halogen-enroll-tpm`, `/usr/libexec/halogen/*` |
 | `variants/npu`, `variants/no-npu` | Per-edition kernel arguments, Quadlet drop-ins, the allowed-options list and default `halogen.env` |
-| `scripts/` | `build.sh`, `build-iso.sh`, `package-iso.sh` (single-file release ISO), `release-info.sh`, `gen-options.py` (options from upstream `FLAGS.md`), `size-report.sh` |
+| `scripts/` | `build.sh`, `build-iso.sh`, `package-iso.sh` (single-file release ISO), `release-info.sh`, `gen-options.py` (options from upstream `FLAGS.md`), `halogen-update.sh` (pins a new Halogen release), `size-report.sh` |
 | `tests/` | `run.sh` (fast checks, no GPU or network), `iso-install.sh` + `vm-login.py` (QEMU install test) |
-| `.github/workflows/` | `build.yml` (image, edge tag), `iso.yml` (ISO + VM install test), `release.yml`, `refresh.yml` (weekly rebuild of stable) |
+| `.github/workflows/` | `build.yml` (image, edge tag), `iso.yml` (ISO + VM install test), `release.yml`, `refresh.yml` (weekly rebuild of stable), `halogen-update.yml` (daily: opens a PR for a new Halogen release) |
 
 ## How the running system works
 

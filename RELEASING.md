@@ -39,11 +39,34 @@ pushed before the ISO tests run. If a run fails, fix it on `main` and cut the ne
 
 ## Move to a new Halogen version
 
-1. Read Halogen's changelog for host, NPU and flag changes.
-2. Update `HALOGEN_VERSION`, `HALOGEN_DIGEST` (from `skopeo inspect`), `HALOGEN_SOURCE_COMMIT`
-   and the three hashes in `versions.env`.
-3. Run `scripts/gen-options.py` on the new `docs/FLAGS.md`, and review new options.
-4. Open a pull request, merge it, and start again at alpha.
+Every morning, the **Halogen update** workflow looks for a newer
+[halogen-flash-server](https://github.com/peonist-ai/halogen-flash-server/releases) release.
+When it finds one, it opens a pull request named "Move to Halogen x.y.z" that:
+
+- updates `HALOGEN_VERSION`, `HALOGEN_DIGEST`, `HALOGEN_SOURCE_COMMIT` and the three hashes
+  in `versions.env`,
+- regenerates the option lists from the new `docs/FLAGS.md` and names any added or removed
+  settings,
+- copies in upstream's release notes, and
+- starts the image build and the VM install test on its branch.
+
+It leaves `HALOGEN_WEIGHTS_REVISION` alone. Change it by hand if the notes say the Flash
+checkpoints changed. To ask for a version now, open **Actions > Halogen update > Run
+workflow**, optionally with a version such as `0.19.0`. If you close its pull request without
+merging, delete its `halogen-update/x.y.z` branch to let the workflow open it again.
+
+Then:
+
+1. Read the notes for host, NPU and setting changes that need work here, and push any of
+   that to the same branch.
+2. Merge once the builds and install tests pass, and start again at alpha.
+
+The workflow needs **Settings > Actions > General > Workflow permissions > Allow GitHub
+Actions to create and approve pull requests** turned on. It never approves or merges
+anything.
+
+To do it by hand instead, clone halogen-flash-server and run
+`scripts/halogen-update.sh path/to/clone pr-body.md [version]`.
 
 ## Branch protection
 

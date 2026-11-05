@@ -11,7 +11,7 @@ BLOCKED = set("""API API_KEY API_KEY_FILE API_LOG API_PORT BIND CACHE_DIR CACHE_
 CACHE_PRUNE_OLD CHAT_TEMPLATE CHECKPOINT CK_OVERLAY DOWNLOAD ENGINE GGUF_CACHE GGUF_THREADS
 MATMUL_TUNING_FILE MTP_HEAD NPU_VERIFY NPU_WITH_GPU PORT RECORD_DAYS RECORD_DIR RECORD_GIB RECORD_TEXT
 TEMPLATE_CHECK TEMPLATE_UNCHECKED TOKENIZER""".split())
-NPU_ONLY = re.compile(r"^(NPU_|GUARD_)")
+NPU_ONLY = re.compile(r"^(NPU_|GUARD_|AGENT_GUARD$)")
 ACTIVE = {
     "npu": {
         "HALOGEN_NPU_MODELS": "decider-0.8b,qwen3-embedding-0.6b,qwen3-reranker-0.6b,qwen3guard-gen-0.6b,qwen3.5-2b",
@@ -36,7 +36,9 @@ def clean(text):
 
 def summary(text):
     text = clean(text)
-    first = re.split(r"(?<=[.:;])\s", text, maxsplit=1)[0].rstrip(":;.")
+    parts = re.split(r"(?<=[.:;])\s", text, maxsplit=2)
+    # A lead-in as short as "A preview:" says too little alone, so keep the next clause.
+    first = (" ".join(parts[:2]) if len(parts) > 1 and len(parts[0]) < 25 else parts[0]).rstrip(":;.")
     return first + "." if len(first) <= 110 else first[:107].rsplit(" ", 1)[0] + "..."
 
 
