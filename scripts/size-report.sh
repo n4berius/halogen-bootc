@@ -52,7 +52,7 @@ if [ -n "$iso" ]; then
   trap 'umount "$mnt" 2>/dev/null || true; rmdir "$mnt"' EXIT
   echo "--- files over 5 MiB on the ISO (MiB)"
   find "$mnt" -type f -size +5M -exec du -m {} + | sort -rn | sed "s|$mnt||"
-  for sq in $(find "$mnt" -type f \( -name '*.img' -o -name '*.squashfs' \)); do
+  find "$mnt" -type f \( -name '*.img' -o -name '*.squashfs' \) -print0 | while IFS= read -r -d '' sq; do
     if unsquashfs -s "$sq" >/dev/null 2>&1; then
       echo "--- squashfs ${sq#"$mnt"}"
       unsquashfs -s "$sq" | grep -iE 'compression|block size|filesystem size' || true
