@@ -48,9 +48,11 @@ python3 scripts/gen-options.py "$work/FLAGS.md"
 
 # The changelog sections newer than the old version, as upstream wrote them.
 # Headings move down a level so they sit under this description's own.
-show CHANGELOG.md | awk -v old="$old_version" '
+# Read from a file: awk stops at the old version, which would cut off a pipe from git show.
+show CHANGELOG.md > "$work/CHANGELOG.md"
+awk -v old="$old_version" '
   /^## / { if ($2 == old) exit; keep = 1; print "### Halogen " $2; next }
-  keep { sub(/^### /, "#### "); print }' |
+  keep { sub(/^### /, "#### "); print }' "$work/CHANGELOG.md" |
   # Upstream's @names and #numbers would notify people and link to this repository's issues.
   sed -E -e 's/(^|[^[:alnum:]_`])@([[:alnum:]-]+)/\1`@\2`/g' \
     -e "s@(^|[^[:alnum:]_/])#([0-9]+)@\\1$source_repo#\\2@g" > "$work/notes.md"
