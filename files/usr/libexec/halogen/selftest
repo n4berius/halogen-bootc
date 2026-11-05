@@ -1,0 +1,227 @@
+#!/bin/bash
+# The beta hardware checklist in one command. Run as root by: halogenctl selftest
+# It only reads: it changes nothing, restarts nothing and prints no secret, serial number or
+# network address, so its output can be shared as it is.
+set -uo pipefail
+release="${HALOGEN_RELEASE_FILE:-/usr/share/halogen/release.env}"
+sys="${HALOGEN_SYSFS:-/sys}"
+dev="${HALOGEN_DEV:-/dev}"
+cmdline="${HALOGEN_CMDLINE:-/proc/cmdline}"
+meminfo="${HALOGEN_MEMINFO:-/proc/meminfo}"
+models="${HALOGEN_MODELS_DIR:-/srv/models}"
+configs="${HALOGEN_CONFIGS_DIR:-/srv/configs}"
+clock="${HALOGEN_CLOCK:-/usr/libexec/halogen/halogen-fabric-clock}"
+port="${HALOGEN_API_PORT:-8731}"
+# shellcheck disable=SC1090
+. "$release"
+npu=0; [ "${HALOGEN_VARIANT:-}" = npu ] && npu=1
+fails=0; warns=0; passes=0; skips=0
+
+say() {
+  case "$1" in
+    PASS) passes=$((passes + 1)) ;; FAIL) fails=$((fails + 1)) ;;
+    WARN) warns=$((warns + 1)) ;; SKIP) skips=$((skips + 1)) ;;
+  esac
+  printf '%-4s %s: %s\n' "$1" "$2" "$3"
+}
+have() { command -v "$1" > /dev/null 2>&1; }
+# Every outside command gets a time limit, so one stuck tool can't stop the report.
+run() { timeout "${HALOGEN_SELFTEST_TIMEOUT:-20}" "$@" 2>&1; }
+
+echo "Halogen self-check, $(date -u '+%Y-%m-%d %H:%M UTC')"
+echo "Edition: ${HALOGEN_VARIANT:-unknown}, Halogen ${HALOGEN_VERSION:-unknown}"
+echo "Board: $(cat "$sys/class/dmi/id/board_vendor" "$sys/class/dmi/id/board_name" 2>/dev/null | paste -sd' ' -), BIOS $(cat "$sys/class/dmi/id/bios_version" 2>/dev/null)"
+echo "Kernel: $(uname -r)"
+if have bootc; then
+  out="$(run bootc status --format=humanreadable)"
+  echo "Images:"; printf '%s\n' "$out" | grep -iE 'booted|rollback|staged|image|version' | sed 's/^/  /' | head -n 8
+fi
+echo
+
+# --- Boot and kernel
+if have mokutil; then
+  out="$(run mokutil --sb-state)"
+  case "$out" in
+    *"SecureBoot enabled"*) say PASS secure-boot "Secure Boot is on" ;;
+    *) say WARN secure-boot "Secure Boot is not on ($(printf '%s' "$out" | head -n 1))" ;;
+  esac
+else say SKIP secure-boot "mokutil is not installed"; fi
+
+line="$(cat "$cmdline")"
+for want in amdgpu.gttsize=126976 ttm.pages_limit=32505856; do
+  case " $line " in *" $want "*) say PASS "kernel-${want%%=*}" "$want is set" ;;
+    *) say FAIL "kernel-${want%%=*}" "$want is missing from the kernel command line" ;; esac
+done
+if [ "$npu" = 1 ]; then
+  case " $line " in *" iommu=pt "*) say PASS kernel-iommu "iommu=pt keeps the NPU available" ;;
+    *) say FAIL kernel-iommu "iommu=pt is missing; the NPU needs the IOMMU on" ;; esac
+  case " $line " in *" amd_iommu=off "*) say FAIL kernel-iommu-off "amd_iommu=off disables the NPU" ;; esac
+else
+  case " $line " in *" amd_iommu=off "*) say PASS kernel-iommu "amd_iommu=off, for the no-NPU edition's faster prefill" ;;
+    *) say WARN kernel-iommu "amd_iommu=off is missing; prefill is 13-16% slower without it" ;; esac
+fi
+
+mem_gib="$(awk '$1 == "MemTotal:" { printf "%d", $2 / 1048576 }' "$meminfo")"
+if [ "${mem_gib:-0}" -ge 100 ]; then say PASS memory "the OS sees ${mem_gib} GiB"
+else say FAIL memory "the OS sees ${mem_gib:-0} GiB; set the BIOS UMA frame buffer to its minimum, not Auto"; fi
+
+# --- System health
+if have systemctl; then
+  out="$(run systemctl --failed --no-legend --plain | awk 'NF { print $1 }')"
+  if [ -z "$out" ]; then say PASS failed-units "no failed system services"
+  else say FAIL failed-units "failed: $(printf '%s' "$out" | paste -sd' ' -)"; fi
+fi
+if have getenforce; then
+  mode="$(run getenforce)"
+  if [ "$mode" = Enforcing ]; then say PASS selinux "SELinux is enforcing"
+  else say WARN selinux "SELinux is $mode"; fi
+fi
+if have journalctl; then
+  # The image has no audit daemon, so denials are in the kernel log.
+  out="$(run journalctl -k -b --no-pager -o cat | grep -E 'avc: +denied' || true)"
+  if [ -z "$out" ]; then say PASS selinux-denials "no SELinux denials since boot"
+  else
+    say FAIL selinux-denials "$(printf '%s\n' "$out" | wc -l) denials since boot, for example:"
+    printf '%s\n' "$out" | sed -E 's/.*(avc: +denied[^}]*\}).*(comm="[^"]*").*(tcontext=[^ ]*).*/       \1 \2 \3/' | sort -u | head -n 5
+  fi
+  out="$(run journalctl -k -b --no-pager -o cat | grep -E 'Direct firmware load|failed to load firmware|firmware: failed' || true)"
+  if [ -z "$out" ]; then say PASS firmware "no missing firmware reported since boot"
+  else
+    say WARN firmware "missing firmware reported (a removed firmware package may be needed):"
+    printf '%s\n' "$out" | grep -oE 'firmware [^ ]+|load [^ ]+ failed' | sort -u | head -n 8 | sed 's/^/       /'
+  fi
+fi
+if have firewall-cmd; then
+  zone="$(run firewall-cmd --get-default-zone)"
+  services="$(run firewall-cmd --zone="$zone" --list-services)"
+  case " $services " in *" halogen "*) say PASS firewall "port $port is open in the $zone zone (open: $services)" ;;
+    *) say FAIL firewall "the halogen service is not open in the $zone zone (open: $services)" ;; esac
+fi
+
+# --- Disk encryption
+crypt="$(lsblk -rno PATH,FSTYPE 2>/dev/null | awk '$2 == "crypto_LUKS" { print $1 }')"
+if [ -z "$crypt" ]; then
+  say INFO luks "no encrypted volume (fine if you chose not to encrypt)"
+else
+  say PASS luks "encrypted: $(printf '%s' "$crypt" | paste -sd' ' -)"
+  for d in $crypt; do
+    out="$(run cryptsetup luksDump "$d")"
+    tokens="$(printf '%s\n' "$out" | grep -cE '^[[:space:]]*[0-9]+: systemd-tpm2' || true)"
+    case "$tokens" in
+      1) say PASS luks-tpm "$d unlocks with the TPM (one binding)" ;;
+      0) say INFO luks-tpm "$d asks for its passphrase at boot. To unlock with the TPM: sudo halogen-enroll-tpm" ;;
+      *) say WARN luks-tpm "$d has $tokens TPM bindings; run sudo halogen-enroll-tpm to keep one" ;;
+    esac
+  done
+fi
+if [ -e "$dev/tpmrm0" ] || [ -e "$dev/tpm0" ]; then say PASS tpm "a TPM is present"
+else say INFO tpm "no TPM found"; fi
+
+# --- GPU and NPU access
+group_of() { stat -c %G "$1" 2>/dev/null; }
+if [ -e "$dev/kfd" ]; then
+  g="$(group_of "$dev/kfd")"
+  if [ "$g" = halogen ]; then say PASS gpu-kfd "$dev/kfd belongs to the halogen group"
+  else say FAIL gpu-kfd "$dev/kfd belongs to group $g, not halogen"; fi
+else say FAIL gpu-kfd "$dev/kfd is missing, so the GPU driver is not ready"; fi
+render=""
+for r in "$dev"/dri/renderD*; do [ -e "$r" ] && render="$r" && break; done
+if [ -n "$render" ]; then
+  g="$(group_of "$render")"
+  if [ "$g" = halogen ]; then say PASS gpu-render "$render belongs to the halogen group"
+  else say FAIL gpu-render "$render belongs to group $g, not halogen"; fi
+else say FAIL gpu-render "no GPU render node in $dev/dri"; fi
+if have amd-smi; then
+  out="$(run amd-smi list)"
+  case "$out" in *GPU*) say PASS amd-smi "amd-smi sees the GPU" ;;
+    *) say WARN amd-smi "amd-smi sees no GPU: $(printf '%s\n' "$out" | tail -n 1)" ;; esac
+fi
+if [ "$npu" = 1 ]; then
+  if [ -e "$dev/accel/accel0" ]; then
+    g="$(group_of "$dev/accel/accel0")"
+    label="$(stat -c %C "$dev/accel/accel0" 2>/dev/null)"
+    if [ "$g" = halogen ]; then say PASS npu-device "$dev/accel/accel0 belongs to the halogen group"
+    else say FAIL npu-device "$dev/accel/accel0 belongs to group $g, not halogen"; fi
+    case "$label" in *:dri_device_t:*) say PASS npu-label "the NPU has the SELinux type the container may use" ;;
+      *) say FAIL npu-label "the NPU's SELinux label is $label, not dri_device_t" ;; esac
+  else say FAIL npu-device "$dev/accel/accel0 is missing; check the IOMMU and NPU firmware"; fi
+  if "$clock" status > /dev/null 2>&1; then say PASS fabric-clock "the GPU fabric clock is held"
+  else say FAIL fabric-clock "the GPU fabric clock is not held: systemctl status halogen-fabric-clock"; fi
+fi
+
+# --- Halogen
+if have systemctl; then
+  state="$(run systemctl is-active halogen-prepare.service)"
+  if [ "$state" = active ]; then say PASS prepare "halogen-prepare ran"
+  else say FAIL prepare "halogen-prepare is $state"; fi
+  user() { run systemctl --user --machine=halogen@.host "$@"; }
+  state="$(user is-active halogen.service)"
+  running=0; [ "$state" = active ] && running=1
+  case "$state" in
+    active) say PASS server "Halogen is running" ;;
+    activating) say WARN server "Halogen is starting or downloading; see sudo halogenctl fetch-logs" ;;
+    *) say FAIL server "Halogen is $state; see sudo halogenctl logs" ;;
+  esac
+fi
+if [ -f "$models/.fetch-stamp" ]; then say PASS models "the models for this release are downloaded and checked"
+else say WARN models "the models are not all downloaded yet; see sudo halogenctl fetch-logs"; fi
+if have systemd-run; then
+  out="$(run systemd-run --machine=halogen@.host --user --pipe --wait --quiet --setenv=HALOGEN_SERVER_RUNNING="${running:-0}" /usr/libexec/halogen/preflight)"
+  case "$out" in *"preflight: ok"*) say PASS preflight "Halogen's own host checks pass" ;;
+    *) say FAIL preflight "$(printf '%s' "$out" | grep -E 'FAIL|warning' | paste -sd';' - | cut -c1-200)" ;; esac
+fi
+
+health() { curl -sS -g -m 5 -o /dev/null -w '%{http_code}' "http://$1:$port/health" 2>/dev/null; }
+if have curl; then
+  code="$(health 127.0.0.1)"
+  if [ "$code" = 200 ]; then say PASS api-ipv4 "the API answers on 127.0.0.1:$port"
+  else say FAIL api-ipv4 "the API does not answer on 127.0.0.1:$port (${code:-no answer})"; fi
+  code="$(health '[::1]')"
+  if [ "$code" = 200 ]; then say PASS api-ipv6 "the API answers on [::1]:$port"
+  else say WARN api-ipv6 "the API does not answer on [::1]:$port (${code:-no answer}); fine if IPv6 is off"; fi
+  if [ -r "$configs/api-key" ]; then
+    # The key goes in a private file, so it never shows in the process list or the report.
+    header="$(mktemp)"; chmod 600 "$header"
+    printf 'Authorization: Bearer %s\n' "$(cat "$configs/api-key")" > "$header"
+    out="$(curl -sS -m 10 -H @"$header" "http://127.0.0.1:$port/v1/models" 2>/dev/null)"
+    rm -f "$header"
+    ids="$(printf '%s' "$out" | python3 -c 'import json,sys; print(" ".join(m["id"] for m in json.load(sys.stdin)["data"]))' 2>/dev/null)"
+    if [ -n "$ids" ]; then say PASS api-models "serving: $ids"
+    else say FAIL api-models "the API key was not accepted, or no models are served"; fi
+  fi
+fi
+
+# --- Model folders
+old="$(find "$models/npu" -mindepth 1 -maxdepth 1 -type d -regex '.*/[0-9]+\.[0-9]+\.[0-9]+' -printf '%f ' 2>/dev/null)"
+if [ -z "$old" ]; then say PASS npu-folder "NPU models are in one folder"
+else say WARN npu-folder "old version folders remain in $models/npu: $old(restart Halogen to move them)"; fi
+if [ "$npu" = 1 ]; then
+  for f in decider LFM custom; do
+    d="$models/$f"
+    if [ ! -d "$d" ]; then say FAIL "folder-$f" "$d is missing"; continue; fi
+    owner="$(stat -c %U "$d")"; label="$(stat -c %C "$d" 2>/dev/null)"
+    if [ "$owner" != halogen ]; then say FAIL "folder-$f" "$d belongs to $owner, not halogen"
+    else case "$label" in *container_file_t*|'') say PASS "folder-$f" "$d is ready for your own checkpoints" ;;
+      *) say FAIL "folder-$f" "$d has SELinux label $label, not container_file_t" ;; esac; fi
+  done
+fi
+meta="$models/.cache/huggingface/download/qwen38-flash-next-v2.hgn.metadata"
+[ ! -r "$meta" ] || say INFO weights "downloaded from weights commit $(head -n 1 "$meta" | cut -c1-12); pinned: ${HALOGEN_WEIGHTS_REVISION:-unknown}"
+free="$(df --output=avail --block-size=1G "$models" 2>/dev/null | tail -n 1 | tr -d ' ')"
+[ -z "$free" ] || say INFO disk "${free} GiB free for models"
+
+# --- Network (names, state and drivers only: no addresses)
+for n in "$sys"/class/net/*; do
+  name="$(basename "$n")"
+  [ -e "$n/device" ] || continue
+  driver="$(basename "$(readlink -f "$n/device/driver")" 2>/dev/null)"
+  state="$(cat "$n/operstate" 2>/dev/null)"; speed="$(cat "$n/speed" 2>/dev/null || true)"
+  if [ "$state" = up ]; then say INFO "net-$name" "up, driver $driver${speed:+, $speed Mb/s}"
+  else say INFO "net-$name" "$state, driver $driver"; fi
+done
+
+echo
+echo "Summary: $passes passed, $warns warnings, $fails failed, $skips skipped"
+echo "Still to do by hand: a soak test (several hours of real load), and bootc switch, upgrade"
+echo "and rollback keeping the TPM unlock and /srv."
+[ "$fails" = 0 ]

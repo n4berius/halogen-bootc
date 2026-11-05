@@ -68,6 +68,22 @@ if [ -n "$luks" ]; then grep -q 'crypto_LUKS' "$out/report.txt"; fi
 grep -q 'halogen-fetch:' "$out/report.txt"
 echo "installed system verified"
 
+# halogenctl selftest, as people run it on hardware. Only what a VM can pass is required.
+cat "$out/selftest.txt"
+selftest_has() { grep -qE "^$1" "$out/selftest.txt" || { echo "selftest: expected '$1'" >&2; exit 1; }; }
+selftest_has 'Summary: '
+selftest_has 'PASS secure-boot:'
+selftest_has 'PASS kernel-amdgpu.gttsize:'
+selftest_has 'PASS kernel-iommu:'
+selftest_has 'PASS firewall:'
+selftest_has 'PASS prepare:'
+selftest_has 'PASS npu-folder:'
+if [ "$variant" = npu ]; then
+  for f in decider LFM custom; do selftest_has "PASS folder-$f:"; done
+fi
+if grep -qE 'SECRET|Bearer|hf_' "$out/selftest.txt"; then echo "selftest printed something private" >&2; exit 1; fi
+echo "selftest verified"
+
 if [ -n "$luks" ]; then
   # First boot left a TPM binding for a Secure Boot state this machine no longer has.
   echo "=== second boot: stale binding, so the passphrase is asked; re-enroll ==="
@@ -86,4 +102,6 @@ if [ -n "$luks" ]; then
   # One token means the re-enroll replaced the stale binding instead of adding a second.
   [ "$tokens" = 1 ] || { echo "expected one TPM token on the LUKS volume, found $tokens" >&2; exit 1; }
   echo "TPM unlock verified"
+  cat "$out/selftest.txt"
+  grep -q '^PASS luks-tpm:' "$out/selftest.txt" || { echo "selftest did not see the TPM unlock" >&2; exit 1; }
 fi

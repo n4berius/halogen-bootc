@@ -85,6 +85,12 @@ def wait_serial(marker, seconds):
 log = wait_serial("RESULT-END", 300)
 report = log.split("RESULT-START")[-1].split("RESULT-END")[0]
 (out / "report.txt").write_text(re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", report))
+# The same self-check people run on hardware. A VM has no GPU, so some checks fail here;
+# iso-install.sh checks the ones a VM can pass.
+typed("halogenctl selftest > /dev/ttyS0 2>&1; echo SELFTEST-RC=$? > /dev/ttyS0\n")
+log = wait_serial("SELFTEST-RC=", 300)
+selftest = log.split("RESULT-END")[-1].split("SELFTEST-RC=")[0]
+(out / "selftest.txt").write_text(re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", selftest))
 
 if mode in ("luks-stale", "luks-enroll"):
     # Exactly what INSTALL.md tells people to run; PASSWORD answers the passphrase prompt.

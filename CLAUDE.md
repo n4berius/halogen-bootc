@@ -42,7 +42,9 @@ our docs.
 
 - Halogen runs as the rootless `halogen` user (UID 970) through a Quadlet in
   `/etc/containers/systemd/users/970/`, with linger on. `halogenctl` wraps it, so run it with
-  `sudo`. `halogenctl model pull|list|remove` manages your own NPU checkpoints.
+  `sudo`. `halogenctl model pull|list|remove` manages your own NPU checkpoints. `halogenctl selftest`
+  (`/usr/libexec/halogen/selftest`, root) runs the beta hardware checklist read-only; the VM
+  install test runs it too and checks what a VM can pass.
 - First boot: `halogen-prepare` (root) creates `/srv/models`, `/srv/configs`, `halogen.env`
   and the API key. `halogen-fetch` (user) pulls the pinned image, downloads models with `hf`
   inside that image, and runs Halogen's `verify`. Then `halogen.service` starts read-only and

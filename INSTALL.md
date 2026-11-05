@@ -156,6 +156,19 @@ Later boots skip the download unless the model list or Halogen version changes.
 
 ## 7. Check the install
 
+Run the self-check. It goes through the hardware checklist in one go, changes nothing, and
+prints nothing private (no keys, serial numbers or network addresses), so you can share its
+output when asking for help:
+
+```bash
+sudo halogenctl selftest | tee selftest.txt
+```
+
+Each line starts with PASS, WARN, FAIL, SKIP or INFO and says what to do about a problem.
+While the first boot is still downloading, `server` and `models` show as not ready yet.
+
+The individual commands, if you want them:
+
 ```bash
 sudo halogenctl doctor
 sudo halogenctl status
@@ -173,8 +186,8 @@ Please confirm these on the first install:
 - `systemctl --failed` is clean. Upstream warns `systemd-remount-fs.service` can fail on
   Anaconda-installed bootc systems. It stayed clean in our VM test.
 - `ls -l /dev/kfd /dev/dri/renderD*` shows group `halogen`.
-- `sudo ausearch -m avc -ts boot` is empty. If `/dev/kfd` shows `denied { map }`, run
-  `sudo setsebool -P container_use_devices true`.
+- `sudo journalctl -k -b | grep 'avc: *denied'` prints nothing. If `/dev/kfd` shows
+  `denied { map }`, run `sudo setsebool -P container_use_devices true`.
 - A soak test mixes your real load for several hours. Kernel 7.2 has a reported GPU memory
   fault, and Halogen's reference host ran 7.1.8.
 
