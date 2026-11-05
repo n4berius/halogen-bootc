@@ -54,10 +54,10 @@ case "${1:-status}" in
         entry="$path"; ! grep -qx 'fast=1' <<< "$out" || entry="$path or $path:fast (faster, small quality cost)"
         echo
         echo "To serve it, add $entry to HALOGEN_NPU_MODELS in /srv/configs/halogen.env, for example:"
+        if in_use "$path"; then echo "  It is already there. To use the new files: sudo halogenctl restart"; exit 0; fi
         line="$(grep '^HALOGEN_NPU_MODELS=' /srv/configs/halogen.env | tail -n 1 || true)"
         new="HALOGEN_NPU_MODELS=${line#HALOGEN_NPU_MODELS=}"; new="${new%,}"
         [ "$new" = HALOGEN_NPU_MODELS= ] && new="$new$path" || new="$new,$path"
-        grep -qxF -- "$new" /srv/configs/halogen.env 2>/dev/null && { echo "  It is already there."; exit 0; }
         echo "  $new"
         if [ -t 0 ]; then
           read -rp "Make that change and restart Halogen now? [y/N] " answer
@@ -85,13 +85,19 @@ case "${1:-status}" in
         ;;
       remove)
         name="${3:-}"
-        [ -n "$name" ] || { echo "usage: halogenctl model remove <name>" >&2; exit 2; }
+        # Only a plain model name: anything else could reach outside the three folders.
+        case "$name" in
+          *[!A-Za-z0-9._-]*|.*|'') echo "usage: halogenctl model remove <name>, as sudo halogenctl model list shows it" >&2; exit 2 ;;
+        esac
         dir=""
-        for kind in decider LFM custom; do [ -d "$models/$kind/$name" ] && dir="$models/$kind/$name"; done
+        for kind in decider LFM custom; do
+          if [ -d "$models/$kind/$name" ]; then dir="$models/$kind/$name"; break; fi
+        done
         [ -n "$dir" ] || { echo "No model called $name. See: sudo halogenctl model list" >&2; exit 1; }
         if in_use "/models/${dir#"$models"/}"; then
           echo "$name is in HALOGEN_NPU_MODELS. Take it out of /srv/configs/halogen.env first." >&2; exit 1
         fi
+        [ -t 0 ] || { echo "Run this in a terminal: it asks before deleting." >&2; exit 1; }
         read -rp "Delete $dir ($(du -sh "$dir" | cut -f1))? [y/N] " answer
         [ "$answer" = y ] || [ "$answer" = Y ] || exit 0
         rm -rf -- "$dir" && echo "Deleted $name."

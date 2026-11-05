@@ -188,8 +188,10 @@ sudo systemctl reboot
 
 To publish a new version, follow [RELEASING.md](RELEASING.md). NPU models are kept in one
 folder, `/srv/models/npu/<model>`, and every file is checked against the new version's record,
-so a new version downloads only the NPU files that changed. Rolling back downloads the older
-files again if they differ.
+so a new version downloads only the NPU files that changed. Rolling back to a version that
+keeps one folder too downloads only the files that differ. Rolling back to an image from before
+the single folder (the 0.18.23 releases and earlier) downloads all its NPU models again, about
+15 GB.
 
 ## Choices worth knowing
 

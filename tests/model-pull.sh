@@ -15,7 +15,7 @@ shift; entry=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --entrypoint) entry="$2"; shift 2 ;;
-    -v|-e|--tmpfs|--security-opt|--cap-drop) shift 2 ;;
+    -v|-e|--tmpfs|--security-opt|--cap-drop|--device|--group-add) shift 2 ;;
     -*) shift ;;
     *) shift; break ;;
   esac

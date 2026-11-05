@@ -12,6 +12,7 @@ max_wait="${HALOGEN_RETRY_MAX_S:-300}"
 progress_s="${HALOGEN_PROGRESS_S:-60}"
 hf_token="${HALOGEN_HF_TOKEN_FILE:-/srv/configs/hf-token}"
 xrt="${HALOGEN_XRT_DIR:-/usr/lib/halogen/xrt}"
+npu_device="${HALOGEN_NPU_DEVICE:-/dev/accel/accel0}"
 
 # shellcheck disable=SC1090
 . "$release"
@@ -95,12 +96,16 @@ else
   echo "halogen-fetch: no Hugging Face token; downloads are anonymous. Add one with: sudo halogenctl hf-token"
 fi
 
-# On the NPU edition, Halogen's NPU tool needs XRT to read your own checkpoints.
-xrt_args=()
+# On the NPU edition, Halogen's NPU tool reads your own checkpoints. Give it what the server
+# has: XRT at the same three paths, the NPU device, and the groups that may open it.
+npu_args=()
 if [ -d "$xrt" ]; then
   for lib in libxrt_coreutil.so.2 libxrt_core.so.2 libxrt_driver_xdna.so.2; do
-    xrt_args+=(-v "$xrt/$lib:/opt/xilinx/xrt/lib/$lib:ro" -v "$xrt/$lib:/usr/lib/x86_64-linux-gnu/$lib:ro")
+    for at in /opt/xilinx/xrt/lib /usr/lib/x86_64-linux-gnu /opt/xilinx/lib/x86_64-linux-gnu; do
+      npu_args+=(-v "$xrt/$lib:$at/$lib:ro")
+    done
   done
+  [ ! -e "$npu_device" ] || npu_args+=(--device "$npu_device" --group-add keep-groups)
 fi
 
 wait_s=15
@@ -110,7 +115,7 @@ while :; do
     -e HF_HOME=/tmp/hf -e HF_HUB_OFFLINE=0 -e HF_HUB_DISABLE_TELEMETRY=1 -e HF_HUB_DISABLE_PROGRESS_BARS=1 \
     -e "WEIGHTS_REPO=$HALOGEN_WEIGHTS_REPO" -e "WEIGHTS_REVISION=$HALOGEN_WEIGHTS_REVISION" \
     -e "NPU_MODELS=$npu_models" -e "VISION=$vision" "${token_args[@]}" \
-    -v "$models:/models" -v "$helper:/fetch.sh:ro" "${xrt_args[@]}" \
+    -v "$models:/models" -v "$helper:/fetch.sh:ro" "${npu_args[@]}" \
     "$HALOGEN_IMAGE" /fetch.sh
   rc=$?
   case "$rc" in

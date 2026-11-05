@@ -226,9 +226,12 @@ interrupted, and puts the checkpoint in the folder that fits:
 
 It then prints the line to put in `/srv/configs/halogen.env`, and offers to make the change and
 restart. Halogen serves the model under its folder's name. Its first start converts the
-checkpoint for the NPU (about a minute) and keeps the result beside it. Halogen fetches only the
-NPU programs it runs on, never the weights. These three folders are the only ones the server
-can write to.
+checkpoint for the NPU (about a minute) and keeps the result beside it. The download step
+fetches only the NPU programs the checkpoint runs on, never Halogen's weights for them.
+
+These three folders are the only ones the server can write to, so it can keep the conversion.
+Use `model pull` to fill them: a folder copied in by hand as root is read-only for the server,
+which then converts it again at every start.
 
 ## 8. Optional: unlock LUKS with the TPM
 
