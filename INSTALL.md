@@ -184,6 +184,24 @@ On the NPU edition, also confirm:
 - `/usr/libexec/halogen/halogen-fabric-clock status` reports the clock as held. With Secure
   Boot on, the kernel runs in lockdown, and this has not been tested on hardware.
 
+### Tools on the machine
+
+The OS is kept small, but these are included for looking after it:
+
+| Command | What it's for |
+|---|---|
+| `amd-smi metric` | GPU temperature, power and clocks. On Strix Halo some fields show N/A |
+| `nvtop` | Live GPU use, and which process holds GPU memory |
+| `htop` | Live CPU and memory use |
+| `tmux` | Keeps a long command running if your SSH connection drops |
+| `lspci`, `lsusb` | List the hardware |
+| `nvme list`, `sudo nvme smart-log /dev/nvme0` | Disk health |
+| `fwupdmgr` | Firmware updates from the vendor, where the board supports it |
+
+Firmware updates use [fwupd](https://fwupd.org/). Check for them with
+`sudo fwupdmgr refresh && sudo fwupdmgr get-updates`, and apply them with
+`sudo fwupdmgr update`. A BIOS update reboots the machine, which stops Halogen until it is back.
+
 ## 8. Optional: unlock LUKS with the TPM
 
 If you chose LUKS, you can avoid typing the passphrase at each boot:
