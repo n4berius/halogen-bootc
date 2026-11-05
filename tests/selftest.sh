@@ -35,7 +35,8 @@ f cryptsetup 'printf "Tokens:\n  0: systemd-tpm2\n"'
 f amd-smi 'if [ -n "${FAKE_NOGPU:-}" ]; then echo "ERROR:root:Unable to detect any GPU devices"; exit 255; fi; printf "GPU: 0\n    BDF: 0000:c3:00.0\n"'
 f systemd-run 'echo "preflight: ok"'
 f bootc 'echo "Booted image: ghcr.io/n4berius/halos-flash:9.9.9"'
-f systemctl 'case "$*" in *--failed*) cat "$FAKE/failed" 2>/dev/null ;; *) echo "${FAKE_STATE:-active}" ;; esac'
+f systemctl 'case "$*" in *--failed*) cat "$FAKE/failed" 2>/dev/null ;; *"show -p Job"*) echo "${FAKE_JOB:-}" ;;
+  *halogen-fetch*) echo "${FAKE_FETCH:-inactive}" ;; *) echo "${FAKE_STATE:-active}" ;; esac'
 f fabric-clock 'exit 0'
 # Group, owner and label as the real image sets them.
 f stat 'case "$2" in %G|%U) echo halogen ;; %C) case "$3" in *accel*) echo system_u:object_r:dri_device_t:s0 ;; *) echo system_u:object_r:container_file_t:s0 ;; esac ;; *) exec /usr/bin/stat "$@" ;; esac'
@@ -109,3 +110,16 @@ for line in 'WARN secure-boot' 'FAIL kernel-amdgpu.gttsize' 'FAIL kernel-iommu-o
   expect "^$line"
 done
 ok "an unhealthy machine gets a FAIL or WARN for each problem"
+
+rm "$work/failed"
+for wait in FAKE_JOB=42 FAKE_FETCH=activating; do
+  env FAKE_STATE=inactive "$wait" "$selftest" > "$work/out" 2>&1 || true
+  expect '^WARN server:.*waiting.*fetch-logs'; refuse '^FAIL (server|api-)'
+done
+FAKE_STATE=inactive FAKE_JOB='Failed to connect to bus' "$selftest" > "$work/out" 2>&1 || true
+expect '^FAIL server:.*halogenctl start'
+FAKE_STATE=inactive FAKE_FETCH=failed "$selftest" > "$work/out" 2>&1 || true
+expect '^FAIL server:.*download and check step failed.*fetch-logs'
+FAKE_STATE=deactivating "$selftest" > "$work/out" 2>&1 || true
+expect '^WARN server:.*deactivating'
+ok "Halogen waiting for the fetch, or stopping, is a warning; a failed fetch or a stopped Halogen says what to do"

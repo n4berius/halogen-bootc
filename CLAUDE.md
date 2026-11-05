@@ -110,9 +110,12 @@ Open issues and the **beta** milestone are the source of truth, prioritised with
 - Merged: smaller ISO (#22, about 1368 MiB plain `.iso`), the Halogen update workflow (#24)
   and the 0.19.0 update, one NPU folder and own checkpoints (#18, #19), weights pinned (#23),
   `halogenctl selftest`, and the rename to halOS.
-- Next: the owner cuts `v0.19.0-alpha.1`, the first release as `halos-flash`. Then freyja
-  moves over with `bootc switch`, runs `sudo halogenctl selftest`, the soak test and
-  `bootc upgrade`/rollback, which closes the hardware checklist (#25) for beta.
+- `v0.19.0-alpha.1` is out. Freyja moved to it with `bootc switch` and `sudo halogenctl selftest`
+  passed (29 PASS; the one WARN, a missing `regulatory.db`, is fixed by adding `wireless-regdb`).
+  Its weights metadata names commit `53113ce2dba7`, not the pin: the `.hgn` files are identical
+  at both commits, and the fetch only downloads weights that are missing.
+- Next on freyja: the soak test and `bootc upgrade`/rollback, which close the hardware
+  checklist (#25) for beta.
 - Without hardware: a `security-auditor` pass, more VM checks (removed packages, open ports),
   a test for the `halogenctl model` wrapper, and clearer fetch messages for a wrong `:fast`.
 
