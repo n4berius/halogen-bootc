@@ -18,6 +18,10 @@ file lfm3-fast devices/f.hnpm 5 $h
 file rerank rerank.hnpw 5 $h
 file lfm3 devices/p.hnpm 5 $h
 file lfm3 lfm3.hnpw 5 $h
+model lfm3-vl repo=org/lfm3-vl revision=z devices=lfm3
+file lfm3-vl vis/v.hnpm 5 $h
+file lfm3-vl lfm3-vl.hnpw 5 $h
+model lfm3-omni repo= revision= devices=lfm3 vis=lfm3-vl
 S
 
 cat > "$work/bin/hf" <<'S'
@@ -52,7 +56,7 @@ S
 cat > "$work/bin/halogen-npu" <<'S'
 #!/bin/bash
 # Halogen's probe names the model a checkpoint was tuned from.
-[ "$1" = probe ] && [ -f "$2/config.json" ] && echo "task=generate base=lfm3"
+[ "$1" = probe ] && [ -f "$2/config.json" ] && echo "task=generate base=$(cat "$2/base" 2>/dev/null || echo lfm3)"
 S
 chmod +x "$work/bin/"*
 ln -s "$work/models" "$work/mount"
@@ -165,3 +169,14 @@ rm -rf "$work/models/npu" "$work/models/.fetch-stamp"
 [ -f "$work/models/npu/embed/devices/d.hnpm" ] || { echo "the programs rerank runs on were not fetched" >&2; exit 1; }
 if [ -e "$work/models/npu/embed/embed.hnpw" ]; then echo "the other model's weights were fetched too" >&2; exit 1; fi
 ok "a model that runs on another's NPU programs fetches only those programs"
+
+# Some of Halogen's models have no download of their own and reuse others' programs, as
+# LFM3-Omni-2B does in 0.19.0. Your own checkpoint of one gets those programs.
+mkdir -p "$work/models/LFM/omni"; echo '{}' > "$work/models/LFM/omni/config.json"; echo lfm3-omni > "$work/models/LFM/omni/base"
+echo 'HALOGEN_NPU_MODELS=/models/LFM/omni' > "$work/config.env"
+rm -rf "$work/models/npu" "$work/models/.fetch-stamp"
+"$work/fetch" > "$work/out" 2>&1 || { cat "$work/out" >&2; exit 1; }
+[ -f "$work/models/npu/lfm3/devices/p.hnpm" ] || { echo "the programs it runs on were not fetched" >&2; exit 1; }
+[ -f "$work/models/npu/lfm3-vl/vis/v.hnpm" ] || { echo "its picture programs were not fetched" >&2; exit 1; }
+if [ -e "$work/models/npu/lfm3-vl/lfm3-vl.hnpw" ]; then echo "another model's weights were fetched" >&2; exit 1; fi
+ok "a checkpoint whose model has no download of its own gets the programs it reuses"

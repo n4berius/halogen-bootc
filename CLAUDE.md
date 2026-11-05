@@ -84,8 +84,10 @@ our docs.
 - `hf` is noisy and shows no progress in the journal. `fetch-in-container` filters it, and
   `fetch-models` logs the size downloaded every minute.
 - Own NPU checkpoints (`d1-2B`, `LFM3-*`) are named by path, need NPU programs fetched, and
-  are converted at first start. `halogen-npu probe` may need XRT, so the fetch mounts it on
-  the NPU edition. Not yet tried on hardware.
+  are converted at first start. `halogen-npu probe` links XRT, so the fetch mounts it, but it
+  needs no NPU device and only the checkpoint's config and tokenizer (checked against 0.19.0's
+  image). Some of Halogen's models have no download of their own and reuse others' programs
+  (`lfm3-omni-2b`, the `-fast` VL and Audio): check the model is known, not that it has a repo.
 - ISO install tests take about 25 to 40 minutes, and a new push cancels the previous run.
   Don't push mid-run unless you mean to.
 - The OS image is flattened (`FROM scratch` + `COPY --from=os / /`) after its `dnf remove`
@@ -101,7 +103,8 @@ Open issues and the **beta** milestone are the source of truth, prioritised with
 
 - PR #22 (draft) adds `scripts/size-report.sh` to the ISO workflow. Its artifacts
   (`size-report-npu` / `size-report-no-npu`) drive trimming for #26.
-- #23 waits for the weights commit hash freyja downloaded:
+- #23: the weights are pinned to a commit (`HALOGEN_WEIGHTS_REVISION`). Freyja can confirm
+  its copy matches with
   `sudo head -n1 /srv/models/.cache/huggingface/download/qwen38-flash-next-v2.hgn.metadata`.
 - #24: build the Halogen update workflow, then let it open the 0.19.0 update PR. The
   changelog notes are on the issue.
