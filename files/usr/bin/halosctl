@@ -144,11 +144,17 @@ case "$cmd" in
     ;;
   upgrade)
     [ -n "$(channel)" ] || echo "Note: this machine is pinned to one release, so an upgrade finds nothing newer. To follow new releases: sudo halosctl switch <channel>"
-    found="$(bootc upgrade --check 2>&1)"; printf '%s\n' "$found"
-    # bootc says "No changes in: <image>" when the registry has nothing newer. Then there is
-    # nothing to stage, so don't ask. Any other answer (an update, or wording we don't know)
-    # goes on to the question.
-    if grep -qi '^No changes in' <<< "$found"; then echo "Already up to date."; exit 0; fi
+    if ! found="$(bootc upgrade --check 2>&1)"; then printf '%s\n' "$found" >&2; die "bootc could not check for updates"; fi
+    printf '%s\n' "$found"
+    # bootc says "No changes in: <image>" when nothing newer is in the registry than what this
+    # machine already has, which includes an update staged earlier. Then there is nothing to
+    # stage, so don't ask. Any other answer (an update, or wording we don't know) goes on.
+    if grep -qi '^No changes in' <<< "$found"; then
+      if [ -n "$(field staged digest)" ] && [ "$(field staged digest)" != "$(field booted digest)" ]; then
+        echo "An update is already staged: $(describe staged). Reboot to use it: sudo systemctl reboot"
+      else echo "Already up to date."; fi
+      exit 0
+    fi
     [ "$check" = 0 ] || exit 0
     from="$(describe booted)"; before="$(field staged digest)"
     echo "Now:   $from"
