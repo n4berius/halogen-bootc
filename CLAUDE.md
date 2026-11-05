@@ -82,8 +82,10 @@ our docs.
 - `hf` is noisy and shows no progress in the journal. `fetch-in-container` filters it, and
   `fetch-models` logs the size downloaded every minute.
 - Own NPU checkpoints (`d1-2B`, `LFM3-*`) are named by path, need NPU programs fetched, and
-  are converted at first start. `halogen-npu probe` may need XRT, so the fetch mounts it on
-  the NPU edition. Not yet tried on hardware.
+  are converted at first start. `halogen-npu probe` links XRT, so the fetch mounts it, but it
+  needs no NPU device and only the checkpoint's config and tokenizer (checked against 0.19.0's
+  image). Some of Halogen's models have no download of their own and reuse others' programs
+  (`lfm3-omni-2b`, the `-fast` VL and Audio): check the model is known, not that it has a repo.
 - ISO install tests take about 25 to 40 minutes, and a new push cancels the previous run.
   Don't push mid-run unless you mean to.
 - The OS image is flattened (`FROM scratch` + `COPY --from=os / /`) after its `dnf remove`

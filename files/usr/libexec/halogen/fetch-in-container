@@ -47,7 +47,10 @@ own_parts() {
   base="$(printf '%s\n' "$info" | tr ' ' '\n' | sed -n 's/^base=//p' | head -n 1)"
   [ -n "$base" ] || { echo "fetch: $1: Halogen could not tell which model it was tuned from" >&2; return 1; }
   [ "$fast" = 0 ] || base="$base-fast"
-  [ -n "$(model_key "$base" repo)" ] || { echo "fetch: $1 is a $base, which this image has no NPU programs for" >&2; return 1; }
+  # Some models have no download of their own and reuse others' programs (LFM3-Omni-2B does),
+  # so ask only that the image knows the model.
+  awk -v id="$base" '$1 == "model" && $2 == id { found = 1 } END { exit !found }' "$pins" \
+    || { echo "fetch: $1 is a $base, which this image has no NPU programs for" >&2; return 1; }
   own="$(model_key "$base" devices)"; own="${own:-$base}"
   echo "fetch: $1 is a $base; fetching its NPU programs" >&2
   echo "$own:devices"
@@ -116,6 +119,7 @@ while read -r id parts; do
     echo "fetch: $id is present"
     continue
   fi
+  [ -n "$repo" ] || { echo "fetch: this image names no download for $id, which has missing files:$need" >&2; exit 3; }
   echo "fetch: downloading $id from $repo${revision:+ at $revision}"
   mkdir -p "$dir"
   # shellcheck disable=SC2086
