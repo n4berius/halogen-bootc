@@ -70,6 +70,8 @@ grep -q 'halogen-fetch:' "$out/report.txt"
 # halosctl reads bootc's status and the image's release file on a real install.
 grep -qE "^halOS [0-9]+\.[0-9]+\.[0-9]+.*, $variant edition" "$out/report.txt" || { echo "halosctl version failed" >&2; exit 1; }
 grep -qE '^Image: +[a-z]' "$out/report.txt" || { echo "halosctl did not read bootc status" >&2; exit 1; }
+# Root never logs in over SSH (files/etc/ssh/sshd_config.d/00-halos.conf), as sshd itself reports.
+grep -qx 'permitrootlogin no' "$out/report.txt" || { echo "sshd allows root logins" >&2; exit 1; }
 echo "installed system verified"
 
 # halogenctl selftest, as people run it on hardware. Only what a VM can pass is required.
