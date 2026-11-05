@@ -1,0 +1,117 @@
+#!/bin/bash
+# Download your own NPU checkpoint from Hugging Face into /srv/models, with hf inside the
+# pinned Halogen image. Runs as the halogen user; halogenctl model pull starts it.
+# Usage: model-pull <hf-repo> [--revision <rev>] [--as <name>]
+# Prints "path=/models/<folder>/<name>" and "fast=1" (when a :fast format exists) last.
+set -uo pipefail
+release="${HALOGEN_RELEASE_FILE:-/usr/share/halogen/release.env}"
+models="${HALOGEN_MODELS_DIR:-/srv/models}"
+hf_token="${HALOGEN_HF_TOKEN_FILE:-/srv/configs/hf-token}"
+xrt="${HALOGEN_XRT_DIR:-/usr/lib/halogen/xrt}"
+npu_device="${HALOGEN_NPU_DEVICE:-/dev/accel/accel0}"
+progress_s="${HALOGEN_PROGRESS_S:-30}"
+# shellcheck disable=SC1090
+. "$release"
+
+repo=""; revision=""; name=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --revision) revision="${2:-}"; shift 2 ;;
+    --as) name="${2:-}"; shift 2 ;;
+    -*) echo "unknown option $1" >&2; exit 2 ;;
+    *) repo="$1"; shift ;;
+  esac
+done
+case "$repo" in
+  */*) ;;
+  *) echo "usage: halogenctl model pull <hf-repo, such as LiquidAI/LFM3-1.7B> [--revision <rev>] [--as <name>]" >&2; exit 2 ;;
+esac
+if [ "${HALOGEN_VARIANT:-}" != npu ]; then
+  echo "Your own NPU checkpoints need the NPU edition." >&2
+  exit 1
+fi
+name="${name:-${repo##*/}}"
+case "$name" in
+  *[!A-Za-z0-9._-]*|.*|'') echo "'$name' can't be a model name: use letters, digits, '.', '_' or '-' (pick one with --as)" >&2; exit 2 ;;
+esac
+if ! podman image exists "$HALOGEN_IMAGE"; then
+  echo "The Halogen image isn't downloaded yet. Let the first boot finish: sudo halogenctl fetch-logs" >&2
+  exit 1
+fi
+
+# Pulling a name you already have updates it in place; hf only fetches what changed.
+dir=""
+for kind in decider LFM custom; do
+  [ -d "$models/$kind/$name" ] && dir="$models/$kind/$name" && break
+done
+[ -n "$dir" ] || dir="$models/.pull/$name"
+mkdir -p "$dir" || exit 1
+rel="${dir#"$models"/}"
+
+args=(-v "$models:/models")
+if [ -s "$hf_token" ]; then
+  args+=(-v "$hf_token:/run/secrets/hf-token:ro" -e HF_TOKEN_PATH=/run/secrets/hf-token)
+fi
+# Halogen's NPU tool gets what the server has: XRT at its three paths and the NPU device.
+if [ -d "$xrt" ]; then
+  for lib in libxrt_coreutil.so.2 libxrt_core.so.2 libxrt_driver_xdna.so.2; do
+    for at in /opt/xilinx/xrt/lib /usr/lib/x86_64-linux-gnu /opt/xilinx/lib/x86_64-linux-gnu; do
+      args+=(-v "$xrt/$lib:$at/$lib:ro")
+    done
+  done
+  [ ! -e "$npu_device" ] || args+=(--device "$npu_device" --group-add keep-groups)
+fi
+in_image() {
+  podman run --rm --pull=never --read-only --tmpfs /tmp --cap-drop=all --security-opt no-new-privileges \
+    -e HF_HOME=/tmp/hf -e HF_HUB_OFFLINE=0 -e HF_HUB_DISABLE_TELEMETRY=1 -e HF_HUB_DISABLE_PROGRESS_BARS=1 \
+    "${args[@]}" --entrypoint "$1" "$HALOGEN_IMAGE" "${@:2}"
+}
+
+echo "Downloading $repo${revision:+ at $revision} into $models/$rel. An interrupted download resumes."
+if [ "$progress_s" -gt 0 ]; then
+  while sleep "$progress_s" > /dev/null 2>&1; do
+    echo "  $(du -sh "$dir" 2>/dev/null | cut -f1) so far"
+  done &
+  reporter=$!
+  trap 'kill "$reporter" 2>/dev/null' EXIT
+fi
+# Halogen reads a checkpoint's config, safetensors and tokenizer files, so other formats a
+# repository may also carry are skipped.
+skip=()
+for pattern in '*.gguf' '*.onnx' '*.bin' '*.pt' '*.pth' '*.h5' '*.msgpack' '*.ckpt' 'onnx/*' 'gguf/*' 'original/*'; do
+  skip+=(--exclude "$pattern")
+done
+in_image hf download "$repo" ${revision:+--revision "$revision"} --local-dir "/models/$rel" "${skip[@]}" \
+  2>&1 | grep --line-buffered -v -e '^Hint: ' -e 'hf update' -e 'Still waiting to acquire lock' \
+    -e 'sending unauthenticated requests' -e "^/models/$rel\$"
+rc="${PIPESTATUS[0]}"
+[ -z "${reporter:-}" ] || kill "$reporter" 2>/dev/null
+if [ "$rc" != 0 ]; then
+  echo "The download stopped. Run the same command again to resume it." >&2
+  exit 1
+fi
+
+info="$(in_image /usr/local/bin/halogen-npu probe "/models/$rel" 2>&1)" || {
+  printf '%s\n' "$info" >&2
+  echo "Halogen can't run this checkpoint on the NPU (above). Remove it with: sudo halogenctl model remove $name" >&2
+  [ "${dir#"$models"/.pull/}" = "$dir" ] || { mkdir -p "$models/custom" && mv "$dir" "$models/custom/$name"; }
+  exit 1
+}
+base="$(printf '%s\n' "$info" | tr ' ' '\n' | sed -n 's/^base=//p' | head -n 1)"
+case "$base" in
+  lfm*|LFM*) kind=LFM ;;
+  d1*|decider*) kind=decider ;;
+  *) kind=custom ;;
+esac
+if [ "${dir#"$models"/.pull/}" != "$dir" ]; then
+  mkdir -p "$models/$kind" && mv "$dir" "$models/$kind/$name" || exit 1
+  rmdir "$models/.pull" 2>/dev/null || true
+else
+  kind="${rel%%/*}"
+fi
+echo "$name is ready in $models/$kind/$name: a ${base:-checkpoint} for the NPU."
+echo "path=/models/$kind/$name"
+# shellcheck disable=SC2016 # awk program, not shell
+if in_image awk -v id="$base-fast" '$1 == "model" && $2 == id { found = 1 } END { exit !found }' /opt/halogen/npu/models.txt 2>/dev/null; then
+  echo "fast=1"
+fi

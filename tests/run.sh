@@ -9,4 +9,5 @@ tests/needs-build.sh
 tests/first-boot.sh
 tests/preflight.sh
 tests/halogen-update.sh
+tests/model-pull.sh
 echo "all checks passed"

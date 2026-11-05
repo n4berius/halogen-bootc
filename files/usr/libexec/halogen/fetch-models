@@ -11,6 +11,8 @@ needed_gib="${HALOGEN_MODELS_NEEDED_GIB:-125}"
 max_wait="${HALOGEN_RETRY_MAX_S:-300}"
 progress_s="${HALOGEN_PROGRESS_S:-60}"
 hf_token="${HALOGEN_HF_TOKEN_FILE:-/srv/configs/hf-token}"
+xrt="${HALOGEN_XRT_DIR:-/usr/lib/halogen/xrt}"
+npu_device="${HALOGEN_NPU_DEVICE:-/dev/accel/accel0}"
 
 # shellcheck disable=SC1090
 . "$release"
@@ -26,11 +28,33 @@ case "$(setting HALOGEN_AGENT_GUARD | tr '[:upper:]' '[:lower:]')" in
     done ;;
 esac
 vision="$(setting HALOGEN_VISION_TOWER)"
-npu_dir="$models/npu/$HALOGEN_VERSION"
+npu_dir="$models/npu"
 stamp="$models/.fetch-stamp"
-want="$(printf '%s\n' "$HALOGEN_IMAGE" "$HALOGEN_WEIGHTS_REPO" "$HALOGEN_WEIGHTS_REVISION" "$npu_models" "$vision" | sha256sum | cut -d' ' -f1)"
+
+# Your own checkpoints (paths) are checked again when their files change.
+own_models() {
+  local id p
+  for id in ${npu_models//,/ }; do
+    case "$id" in /models/*) p="$models/${id#/models/}"; p="${p%:fast}"
+      stat -c '%n %s %Y' "$p/config.json" "$p/model.safetensors" 2>/dev/null ;; esac
+  done
+}
+want="$(printf '%s\n' "$HALOGEN_IMAGE" "$HALOGEN_WEIGHTS_REPO" "$HALOGEN_WEIGHTS_REVISION" "$npu_models" "$vision" "$(own_models)" | sha256sum | cut -d' ' -f1)"
 
 mkdir -p "$npu_dir" || exit 1
+
+# Before 0.19, NPU models were kept per Halogen version (npu/0.18.23/<model>). Move them into
+# the one folder, the current version's first. The fetch below checks every file against this
+# image's record and downloads only what differs, so no model is fetched again needlessly.
+for old in "$npu_dir/$HALOGEN_VERSION" "$npu_dir"/[0-9]*.[0-9]*.[0-9]*; do
+  [ -d "$old" ] || continue
+  for model in "$old"/*/; do
+    [ -d "$model" ] || continue
+    [ -e "$npu_dir/$(basename "$model")" ] || mv "$model" "$npu_dir/$(basename "$model")"
+  done
+  rm -rf "$old"
+  echo "halogen-fetch: moved NPU models from $old into $npu_dir"
+done
 
 wait_s=15
 until podman image exists "$HALOGEN_IMAGE"; do
@@ -72,6 +96,18 @@ else
   echo "halogen-fetch: no Hugging Face token; downloads are anonymous. Add one with: sudo halogenctl hf-token"
 fi
 
+# On the NPU edition, Halogen's NPU tool reads your own checkpoints. Give it what the server
+# has: XRT at the same three paths, the NPU device, and the groups that may open it.
+npu_args=()
+if [ -d "$xrt" ]; then
+  for lib in libxrt_coreutil.so.2 libxrt_core.so.2 libxrt_driver_xdna.so.2; do
+    for at in /opt/xilinx/xrt/lib /usr/lib/x86_64-linux-gnu /opt/xilinx/lib/x86_64-linux-gnu; do
+      npu_args+=(-v "$xrt/$lib:$at/$lib:ro")
+    done
+  done
+  [ ! -e "$npu_device" ] || npu_args+=(--device "$npu_device" --group-add keep-groups)
+fi
+
 wait_s=15
 while :; do
   podman run --rm --pull=never --read-only --tmpfs /tmp \
@@ -79,7 +115,7 @@ while :; do
     -e HF_HOME=/tmp/hf -e HF_HUB_OFFLINE=0 -e HF_HUB_DISABLE_TELEMETRY=1 -e HF_HUB_DISABLE_PROGRESS_BARS=1 \
     -e "WEIGHTS_REPO=$HALOGEN_WEIGHTS_REPO" -e "WEIGHTS_REVISION=$HALOGEN_WEIGHTS_REVISION" \
     -e "NPU_MODELS=$npu_models" -e "VISION=$vision" "${token_args[@]}" \
-    -v "$models:/models" -v "$npu_dir:/models/npu" -v "$helper:/fetch.sh:ro" \
+    -v "$models:/models" -v "$helper:/fetch.sh:ro" "${npu_args[@]}" \
     "$HALOGEN_IMAGE" /fetch.sh
   rc=$?
   case "$rc" in

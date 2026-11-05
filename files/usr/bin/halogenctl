@@ -40,5 +40,70 @@ case "${1:-status}" in
     chown halogen:halogen "$token.new" && mv "$token.new" "$token"
     echo "Saved. The next download uses it: sudo halogenctl restart"
     ;;
-  *) echo "usage: halogenctl status|start|stop|restart|logs [lines]|fetch-logs [lines]|doctor|config|api-key|hf-token [--remove]" >&2; exit 2 ;;
+  model)
+    # Your own NPU checkpoints under /srv/models/{decider,LFM,custom}.
+    models=/srv/models
+    as_halogen() { systemd-run --machine=halogen@.host --user --pipe --wait --quiet "$@"; }
+    in_use() { as_halogen /usr/libexec/halogen/render-config --show 2>/dev/null | grep '^HALOGEN_NPU_MODELS=' | tr '=,' '\n' | sed 's/:fast$//' | grep -qxF -- "$1"; }
+    case "${2:-list}" in
+      pull)
+        shift 2
+        out="$(as_halogen /usr/libexec/halogen/model-pull "$@" | tee /dev/stderr)" || exit 1
+        path="$(sed -n 's/^path=//p' <<< "$out")"
+        [ -n "$path" ] || exit 1
+        entry="$path"; ! grep -qx 'fast=1' <<< "$out" || entry="$path or $path:fast (faster, small quality cost)"
+        echo
+        echo "To serve it, add $entry to HALOGEN_NPU_MODELS in /srv/configs/halogen.env, for example:"
+        if in_use "$path"; then echo "  It is already there. To use the new files: sudo halogenctl restart"; exit 0; fi
+        line="$(grep '^HALOGEN_NPU_MODELS=' /srv/configs/halogen.env | tail -n 1 || true)"
+        new="HALOGEN_NPU_MODELS=${line#HALOGEN_NPU_MODELS=}"; new="${new%,}"
+        [ "$new" = HALOGEN_NPU_MODELS= ] && new="$new$path" || new="$new,$path"
+        echo "  $new"
+        if [ -t 0 ]; then
+          read -rp "Make that change and restart Halogen now? [y/N] " answer
+          if [ "$answer" = y ] || [ "$answer" = Y ]; then
+            if [ -n "$line" ]; then
+              n="$(grep -n '^HALOGEN_NPU_MODELS=' /srv/configs/halogen.env | tail -n 1 | cut -d: -f1)"
+              sed -i "${n}s|.*|$new|" /srv/configs/halogen.env
+            else
+              echo "$new" >> /srv/configs/halogen.env
+            fi
+            unit restart halogen.service
+            echo "Restarted. The first start converts the checkpoint for the NPU (about a minute)."
+          fi
+        fi
+        ;;
+      list)
+        printf '%-28s %-8s %-8s %s\n' NAME FOLDER SIZE "IN USE"
+        for dir in "$models"/decider/*/ "$models"/LFM/*/ "$models"/custom/*/; do
+          [ -d "$dir" ] || continue
+          dir="${dir%/}"; rel="${dir#"$models"/}"
+          used=no; ! in_use "/models/$rel" || used=yes
+          printf '%-28s %-8s %-8s %s\n' "$(basename "$dir")" "${rel%%/*}" "$(du -sh "$dir" | cut -f1)" "$used"
+        done
+        echo "Halogen's own NPU models: $(find "$models/npu" -mindepth 1 -maxdepth 1 -type d -printf '%f ' 2>/dev/null)"
+        ;;
+      remove)
+        name="${3:-}"
+        # Only a plain model name: anything else could reach outside the three folders.
+        case "$name" in
+          *[!A-Za-z0-9._-]*|.*|'') echo "usage: halogenctl model remove <name>, as sudo halogenctl model list shows it" >&2; exit 2 ;;
+        esac
+        dir=""
+        for kind in decider LFM custom; do
+          if [ -d "$models/$kind/$name" ]; then dir="$models/$kind/$name"; break; fi
+        done
+        [ -n "$dir" ] || { echo "No model called $name. See: sudo halogenctl model list" >&2; exit 1; }
+        if in_use "/models/${dir#"$models"/}"; then
+          echo "$name is in HALOGEN_NPU_MODELS. Take it out of /srv/configs/halogen.env first." >&2; exit 1
+        fi
+        [ -t 0 ] || { echo "Run this in a terminal: it asks before deleting." >&2; exit 1; }
+        read -rp "Delete $dir ($(du -sh "$dir" | cut -f1))? [y/N] " answer
+        [ "$answer" = y ] || [ "$answer" = Y ] || exit 0
+        rm -rf -- "$dir" && echo "Deleted $name."
+        ;;
+      *) echo "usage: halogenctl model pull <hf-repo> [--revision <rev>] [--as <name>] | list | remove <name>" >&2; exit 2 ;;
+    esac
+    ;;
+  *) echo "usage: halogenctl status|start|stop|restart|logs [lines]|fetch-logs [lines]|doctor|config|api-key|hf-token [--remove]|model pull|list|remove" >&2; exit 2 ;;
 esac
