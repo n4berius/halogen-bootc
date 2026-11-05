@@ -2,16 +2,23 @@
 # Admin wrapper for the rootless Halogen service. Run with sudo.
 set -euo pipefail
 unit() { systemctl --user --machine=halogen@.host "$@"; }
+# logs and fetch-logs keep following only on a terminal, so `| tail` and `> file` finish.
+# An optional second argument sets how many lines to show (default 100).
+follow=(); [ ! -t 1 ] || follow=(-f)
+lines="${2:-100}"
 
 case "${1:-status}" in
   status) unit --no-pager status halogen-fetch.service halogen.service || true ;;
   start|stop|restart) unit "$1" halogen.service ;;
-  logs) exec journalctl -f -n 100 _SYSTEMD_USER_UNIT=halogen.service + _SYSTEMD_USER_UNIT=halogen-fetch.service ;;
-  fetch-logs) exec journalctl -f -n 100 _SYSTEMD_USER_UNIT=halogen-fetch.service ;;
+  logs) exec journalctl --no-pager "${follow[@]}" -n "$lines" _SYSTEMD_USER_UNIT=halogen.service + _SYSTEMD_USER_UNIT=halogen-fetch.service ;;
+  fetch-logs) exec journalctl --no-pager "${follow[@]}" -n "$lines" _SYSTEMD_USER_UNIT=halogen-fetch.service ;;
   doctor)
     # Runs under the service manager, so it sees the service's real limits.
     systemd-run --machine=halogen@.host --user --pipe --wait --quiet /usr/libexec/halogen/render-config >/dev/null
-    systemd-run --machine=halogen@.host --user --pipe --wait --quiet /usr/libexec/halogen/preflight
+    # While Halogen runs, the GTT it holds is expected, not a leftover from a crash.
+    running=0; ! unit --quiet is-active halogen.service || running=1
+    systemd-run --machine=halogen@.host --user --pipe --wait --quiet \
+      --setenv=HALOGEN_SERVER_RUNNING="$running" /usr/libexec/halogen/preflight
     ;;
   config)
     # Shows what Halogen receives. Ignored lines are explained above the list.
@@ -20,5 +27,18 @@ case "${1:-status}" in
     grep -v '^#' /usr/share/halogen/locked.env
     ;;
   api-key) cat /srv/configs/api-key; echo ;;
-  *) echo "usage: halogenctl status|start|stop|restart|logs|fetch-logs|doctor|config|api-key" >&2; exit 2 ;;
+  hf-token)
+    # Store a Hugging Face read token for model downloads. It is never printed.
+    token=/srv/configs/hf-token
+    if [ "${2:-}" = --remove ]; then rm -f "$token"; echo "Removed the Hugging Face token."; exit 0; fi
+    read -rsp "Hugging Face read token (from huggingface.co/settings/tokens): " value; echo
+    case "$value" in
+      hf_?*) ;;
+      *) echo "That doesn't look like a token; they start with hf_. Nothing saved." >&2; exit 1 ;;
+    esac
+    (umask 077; printf '%s\n' "$value" > "$token.new")
+    chown halogen:halogen "$token.new" && mv "$token.new" "$token"
+    echo "Saved. The next download uses it: sudo halogenctl restart"
+    ;;
+  *) echo "usage: halogenctl status|start|stop|restart|logs [lines]|fetch-logs [lines]|doctor|config|api-key|hf-token [--remove]" >&2; exit 2 ;;
 esac

@@ -10,6 +10,14 @@ root="${HALOGEN_MODELS_ROOT:-/models}"
 model_key() { awk -v id="$1" -v k="$2" '$1 == "model" && $2 == id { for (i = 3; i <= NF; i++) if (index($i, k "=") == 1) { print substr($i, length(k) + 2); exit } }' "$pins"; }
 model_files() { awk -v id="$1" '$1 == "file" && $2 == id { print $3, $4, $5 }' "$pins"; }
 
+# hf with its upgrade adverts, lock chatter and anonymous-use warning removed: this
+# image pins its hf version, and fetch-models already says whether a token is in use.
+hf_quiet() {
+  hf "$@" 2>&1 | grep --line-buffered -v -e '^Hint: ' -e '^To update, run: hf update' \
+    -e 'Still waiting to acquire lock' -e 'sending unauthenticated requests to the HF Hub'
+  return "${PIPESTATUS[0]}"
+}
+
 flash_files="qwen38-flash-next-v2.hgn qwen38-flash-next-ngram.hgn"
 [ -z "$VISION" ] || flash_files="$flash_files qwen38-flash-next-vision.hgn"
 missing=""
@@ -17,20 +25,28 @@ for f in $flash_files; do [ -f "$root/$f" ] || missing="$missing $f"; done
 if [ -n "$missing" ]; then
   echo "fetch: downloading$missing from $WEIGHTS_REPO"
   # shellcheck disable=SC2086
-  hf download "$WEIGHTS_REPO" $missing --revision "$WEIGHTS_REVISION" --local-dir "$root" || exit 1
+  hf_quiet download "$WEIGHTS_REPO" $missing --revision "$WEIGHTS_REVISION" --local-dir "$root" || exit 1
 fi
 if [ ! -f "$root/tokenizer/tokenizer.json" ]; then
-  hf download "$WEIGHTS_REPO" --include 'tokenizer/*' --revision "$WEIGHTS_REVISION" --local-dir "$root" || exit 1
+  hf_quiet download "$WEIGHTS_REPO" --include 'tokenizer/*' --revision "$WEIGHTS_REVISION" --local-dir "$root" || exit 1
 fi
 
 ids=""
+unknown=""
 for id in ${NPU_MODELS//,/ }; do
   case "$id" in
     /*) echo "fetch: $id is your own model, so it is not downloaded"; continue ;;
   esac
-  [ -n "$(model_key "$id" repo)" ] || { echo "fetch: this image has no record of NPU model $id" >&2; exit 3; }
+  if [ -z "$(model_key "$id" repo)" ]; then unknown="$unknown $id"; continue; fi
   ids="$ids $id $(model_key "$id" devices)"
 done
+if [ -n "$unknown" ]; then
+  # Check every name before stopping, so one edit can fix them all.
+  for id in $unknown; do echo "fetch: this image has no record of NPU model $id" >&2; done
+  echo "fetch: NPU models this image can download (names are case-sensitive):" >&2
+  awk '$1 == "model" { print "fetch:   " $2 }' "$pins" >&2
+  exit 3
+fi
 
 for id in $(printf '%s\n' "$ids" | tr ' ' '\n' | awk 'NF && !seen[$0]++'); do
   dir="$root/npu/$id"
@@ -53,7 +69,7 @@ for id in $(printf '%s\n' "$ids" | tr ' ' '\n' | awk 'NF && !seen[$0]++'); do
   echo "fetch: downloading $id from $repo${revision:+ at $revision}"
   mkdir -p "$dir"
   # shellcheck disable=SC2086
-  hf download "$repo" $need ${revision:+--revision "$revision"} --local-dir "$dir" >/dev/null || exit 1
+  hf_quiet download "$repo" $need ${revision:+--revision "$revision"} --local-dir "$dir" >/dev/null || exit 1
   while read -r path size sha; do
     [ -n "$path" ] || continue
     [ "$(sha256sum "$dir/$path" | cut -d' ' -f1)" = "$sha" ] \

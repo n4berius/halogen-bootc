@@ -115,14 +115,12 @@ Pushing to `main` publishes the `edge` images, and tags publish releases. Each M
 newest stable release is rebuilt with Fedora updates. Changes to the image or installer also
 run the full ISO install test.
 
-To build locally, you need Podman and Skopeo:
+To build the image or ISO yourself, follow [BUILDING.md](BUILDING.md). In short:
 
 ```bash
 tests/run.sh
-sudo scripts/build.sh
-sudo scripts/build-iso.sh    # writes the ISO under output/
-sudo HALOGEN_VARIANT=no-npu scripts/build.sh
-sudo HALOGEN_VARIANT=no-npu scripts/build-iso.sh
+sudo scripts/build.sh        # the OS image
+sudo scripts/build-iso.sh    # the USB installer, under output/
 ```
 
 `versions.env` pins Halogen by digest, so every build runs the same container until the pin
@@ -156,14 +154,19 @@ To change what is allowed or locked, edit `files/usr/share/halogen/locked.env` o
 ```bash
 sudo halogenctl status       # service state
 sudo halogenctl fetch-logs   # first-boot download progress
-sudo halogenctl logs         # server and fetch logs
+sudo halogenctl logs         # server and fetch logs; add a number for more lines
 sudo halogenctl doctor       # BIOS, kernel, NPU, clock and memlock checks
 sudo halogenctl restart      # after editing /srv/configs/halogen.env
 sudo halogenctl config       # show the settings in effect
 sudo halogenctl api-key      # print the API key
+sudo halogenctl hf-token     # save a Hugging Face token for faster model downloads
 ```
 
-Clients use `http://<host>:8731/v1` with `Authorization: Bearer <api-key>`.
+`logs` and `fetch-logs` follow new lines in a terminal until you press Ctrl+C. Piped into
+`tail` or `grep`, or saved to a file, they print and stop.
+
+Clients use `http://<host>:8731/v1` with `Authorization: Bearer <api-key>`. The API listens on
+IPv4.
 
 ## Upgrade and roll back
 
