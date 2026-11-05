@@ -37,9 +37,9 @@ name, but allows saying halOS runs Halogen.
 | `versions.env` | Every pinned input: Fedora base, Halogen version, digest and source commit, upstream file hashes, weights repo and revision, Debian image, XRT minimum |
 | `Containerfile` | The OS image. XRT comes from Debian trixie-backports, because Halogen's container is Debian 13 |
 | `Containerfile.installer`, `installer/` | The live installer image, Anaconda defaults (storage layout), branding and boot menu |
-| `files/` | Copied into both editions: systemd units, `halogenctl`, `halogen-enroll-tpm`, `/usr/libexec/halogen/*` |
+| `files/` | Copied into both editions: systemd units, `halosctl`, `halogenctl`, `halogen-enroll-tpm`, `/usr/libexec/halogen/*` |
 | `variants/npu`, `variants/no-npu` | Per-edition kernel arguments, Quadlet drop-ins, the allowed-options list and default `halogen.env` |
-| `scripts/` | `build.sh`, `build-iso.sh`, `package-iso.sh` (single-file release ISO), `release-info.sh`, `gen-options.py` (options from upstream `FLAGS.md`), `halogen-update.sh` (pins a new Halogen release), `size-report.sh` |
+| `scripts/` | `build.sh`, `build-iso.sh`, `package-iso.sh` (single-file release ISO), `release-info.sh`, `gen-options.py` (options from upstream `FLAGS.md`), `halogen-update.sh` (pins a new Halogen release), `size-report.sh`, `channels.sh` (which channel tags a release moves), `push-image.sh` |
 | `tests/` | `run.sh` (fast checks, no GPU or network), `iso-install.sh` + `vm-login.py` (QEMU install test) |
 | `.claude/agents/` | Subagents: `code-reviewer` (QA review before merge) and `security-auditor` (audit, zero-cost hardening ideas). Both only read and report |
 | `.github/workflows/` | `build.yml` (image, edge tag), `iso.yml` (ISO + VM install test), `release.yml`, `refresh.yml` (weekly rebuild of stable), `halogen-update.yml` (daily: opens a PR for a new Halogen release) |
@@ -69,8 +69,13 @@ name, but allows saying halOS runs Halogen.
   checkpoint only on a writable folder (on a read-only one it converts into /tmp at every start).
 - `/srv` is `/var/srv` on bootc. The installer makes LVM volumes for `/`, `/var`, `/var/log`,
   `/var/log/audit`, `/var/home`, `/var/srv/configs` and `/var/srv/models`.
-- Updates are manual (`bootc switch` / `upgrade`), since a reboot stops inference. Pre-release
-  tags never move. The version tag (`0.19.0`) moves with stable releases and weekly rebuilds.
+- Updates are manual, since a reboot stops inference. `halosctl` (`files/usr/bin/halosctl`)
+  handles the OS: `version`, `switch <channel>`, `upgrade`, `rollback [--to]`, `history`
+  (`/var/lib/halos/history`). `halogenctl` handles the engine and models. Exact release tags
+  never move. Channel tags (`alpha`, `beta`, `rc`, `stable`, `edge`) do, and each one points to
+  the newest release at least that stable (`scripts/channels.sh`), so a channel never moves
+  backwards. The version tag (`0.19.0`) moves with stable releases and weekly rebuilds. The
+  image's release name is `HALOS_RELEASE` in `release.env` and its version label (#40).
 
 ## Lessons already learned
 

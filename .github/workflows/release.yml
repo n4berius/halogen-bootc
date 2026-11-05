@@ -19,6 +19,7 @@ jobs:
     outputs:
       tag: ${{ steps.info.outputs.tag }}
       channel: ${{ steps.info.outputs.channel }}
+      channels: ${{ steps.info.outputs.channels }}
       image_tag: ${{ steps.info.outputs.image_tag }}
       prerelease: ${{ steps.info.outputs.prerelease }}
     steps:
@@ -33,6 +34,10 @@ jobs:
         run: |
           scripts/release-info.sh "$TAG" >> "$GITHUB_OUTPUT"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          # This channel and every less stable one that has nothing newer.
+          channels="$(scripts/channels.sh "$TAG")"
+          echo "channels=$channels" >> "$GITHUB_OUTPUT"
+          echo "Moves the channels: ${channels:-none, a newer release exists}"
       - name: Create the tag
         if: github.event_name == 'workflow_dispatch'
         env:
@@ -55,7 +60,7 @@ jobs:
     env:
       HALOGEN_VARIANT: ${{ matrix.variant }}
       IMAGE_TAG: ${{ needs.info.outputs.image_tag }}
-      CHANNEL: ${{ needs.info.outputs.channel }}
+      CHANNELS: ${{ needs.info.outputs.channels }}
     steps:
       - uses: actions/checkout@v7
       - run: tests/run.sh
@@ -63,7 +68,8 @@ jobs:
       - name: Push
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u "${{ github.actor }}" --password-stdin
-          scripts/push-image.sh "$CHANNEL"
+          # Unquoted: one word per channel, none for an old release run again.
+          scripts/push-image.sh $CHANNELS
 
   iso:
     needs: [info, image]

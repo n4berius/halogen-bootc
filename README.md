@@ -179,21 +179,25 @@ Automatic updates are off because a reboot stops inference and takes the model r
 If the GHCR package is private, the machine needs a read-only token in
 `/etc/ostree/auth.json` to reach it.
 
-```bash
-sudo bootc upgrade --apply   # same Halogen version, newer Fedora updates
-sudo bootc rollback          # go back to the previous image
-```
-
-Each machine stays on its Halogen version until you move it:
+`halosctl` handles the OS, as `halogenctl` handles Halogen. Changes apply at the next reboot,
+or at once with `--reboot`, and each one asks first:
 
 ```bash
-sudo bootc switch ghcr.io/n4berius/halos-flash:0.19.1
-sudo systemctl reboot
+sudo halosctl version            # release, edition, channel, Halogen version, staged update, rollback image
+sudo halosctl switch beta        # follow a channel: alpha, beta, rc, release (stable) or edge
+sudo halosctl upgrade            # stage the newest release on your channel (--check only looks)
+sudo halosctl rollback           # back to the previous image (--to 0.19.0-alpha.1 for an older one)
+sudo halosctl history            # every change made with halosctl
 ```
 
-Machines installed before the rename follow the old image name,
-`ghcr.io/n4berius/halogen-flash-bootc`, which gets no new builds. Switch once to the new name
-with the tag you want, as above (add `-no-npu` on that edition).
+A channel also gets newer releases of the more stable channels, so `beta` gets an RC or stable
+release when it is newer than the newest beta. Without a channel, a machine stays on the exact
+release it was installed from. `sudo bootc status` shows the same from bootc itself.
+
+Machines from before `halosctl` (`v0.19.0-alpha.1` and older, including those on the old image
+name `ghcr.io/n4berius/halogen-flash-bootc`) switch once by hand, then use `halosctl`:
+`sudo bootc switch ghcr.io/n4berius/halos-flash:alpha` (or `beta`, `rc`, `stable`; add
+`-no-npu` on that edition).
 
 To publish a new version, follow [RELEASING.md](RELEASING.md). NPU models are kept in one
 folder, `/srv/models/npu/<model>`, and every file is checked against the new version's record,

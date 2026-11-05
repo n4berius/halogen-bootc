@@ -1,0 +1,165 @@
+#!/bin/bash
+# halOS admin tool for the OS: which release you run, updates, release channels and rollback.
+# halogenctl handles the Halogen server and its models. Run with sudo.
+set -euo pipefail
+# shellcheck source=/dev/null
+. "${HALOGEN_RELEASE_FILE:-/usr/share/halogen/release.env}"
+history="${HALOS_HISTORY:-/var/lib/halos/history}"
+repo_default=ghcr.io/n4berius/halos-flash
+suffix=""; [ "${HALOGEN_VARIANT:-npu}" = npu ] || suffix="-no-npu"
+
+usage() {
+  cat <<'U'
+usage: halosctl version
+       halosctl upgrade [--check] [--reboot] [--yes]
+       halosctl switch alpha|beta|rc|release|edge [--reboot] [--yes]
+       halosctl rollback [--to <version>] [--reboot] [--yes]
+       halosctl history
+
+Channels: alpha, beta and rc are test releases; release (stable) is for production; edge is
+every change to main. Each channel also gets newer releases of the more stable ones.
+Changes apply at the next reboot, which stops Halogen. --reboot does it at once.
+U
+}
+
+die() { echo "halosctl: $*" >&2; exit 1; }
+[ "$(id -u)" = 0 ] || die "run it with sudo"
+
+status_json=""
+status() { [ -n "$status_json" ] || status_json="$(bootc status --format=json --format-version=1)"; printf '%s' "$status_json"; }
+# Field of a deployment (booted, staged or rollback): ref, version, digest or timestamp.
+field() {
+  status | jq -r --arg d "$1" --arg f "$2" '.status[$d] // empty | .image // empty |
+    {ref: .image.image, version: .version, digest: .imageDigest, timestamp: .timestamp}[$f] // empty'
+}
+describe() { local r v; r="$(field "$1" ref)"; v="$(field "$1" version)"; [ -n "$r" ] && echo "$r${v:+ ($v)}"; }
+
+booted_ref() { field booted ref; }
+repo() {
+  local r; r="$(booted_ref)"; r="${r%@*}"; r="${r%:*}"
+  case "$r" in */halos-flash) echo "$r" ;; *) echo "$repo_default" ;; esac
+}
+# The channel the booted image follows, or empty when it is pinned to one exact release.
+channel() {
+  local t; t="$(booted_ref)"; t="${t##*/}"
+  case "$t" in *:*) t="${t##*:}" ;; *) return 0 ;; esac
+  t="${t%-no-npu}"
+  case "$t" in alpha|beta|rc|stable|edge) echo "$t" ;; latest) echo stable ;; esac
+}
+
+record() {
+  mkdir -p "$(dirname "$history")"
+  printf '%s  %-8s  %s -> %s  (by %s)\n' "$(date -u '+%Y-%m-%d %H:%M UTC')" "$1" "$2" "$3" \
+    "${SUDO_USER:-root}" >> "$history"
+}
+
+yes=0; reboot=0; check=0; to=""
+confirm() {
+  [ "$yes" = 1 ] && return 0
+  [ -t 0 ] || die "nothing changed: add --yes to confirm without a terminal"
+  local a; read -rp "$1 [y/N] " a
+  case "$a" in y|Y|yes|YES) ;; *) echo "Nothing changed."; exit 1 ;; esac
+}
+finish() {
+  if [ "$reboot" = 1 ]; then
+    if [ "$(systemctl --user --machine=halogen@.host is-active halogen-fetch.service 2>/dev/null)" = activating ]; then
+      echo "Not rebooting: Halogen is downloading models (sudo halogenctl fetch-logs). Reboot when it is done."
+      return 0
+    fi
+    echo "Rebooting now."; systemctl reboot
+  else
+    echo "It applies at the next reboot, which stops Halogen for a few minutes: sudo systemctl reboot"
+  fi
+}
+# Exact digest and release of an image in the registry, or nothing if it doesn't exist.
+# Uses bootc's registry login, if there is one (a private package).
+remote() {
+  local auth=(); [ ! -r /etc/ostree/auth.json ] || auth=(--authfile /etc/ostree/auth.json)
+  skopeo inspect "${auth[@]}" --no-tags --format '{{.Digest}} {{index .Labels "org.opencontainers.image.version"}}' \
+    "docker://$1" 2>/dev/null || true
+}
+# Switch to another image, after showing from -> to and asking.
+switch_to() {
+  local what="$1" target="$2" info from
+  info="$(remote "$target")"
+  [ -n "$info" ] || die "$target was not found. Is there a release for it yet, and is the network up?"
+  from="$(describe booted)"
+  echo "Now:   $from"
+  echo "After: $target (${info#* })"
+  confirm "Switch to it?"
+  bootc switch "$target"
+  record "$what" "$from" "$target (${info#* })"
+  finish
+}
+
+cmd="${1:-version}"; [ $# = 0 ] || shift
+args=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --yes|-y) yes=1 ;;
+    --reboot) reboot=1 ;;
+    --check) check=1 ;;
+    --to) [ $# -ge 2 ] || die "--to needs a version, such as 0.19.0-alpha.1"; to="$2"; shift ;;
+    -h|--help) usage; exit 0 ;;
+    -*) usage >&2; exit 2 ;;
+    *) args+=("$1") ;;
+  esac
+  shift
+done
+
+case "$cmd" in
+  version)
+    ch="$(channel)"
+    echo "halOS ${HALOS_RELEASE:-$(field booted version)}, ${HALOGEN_VARIANT:-unknown} edition"
+    if [ -n "$ch" ]; then echo "Channel:   $ch"
+    else echo "Channel:   none, pinned to this release (follow one with: sudo halosctl switch beta)"; fi
+    echo "Halogen:   ${HALOGEN_VERSION:-unknown} (${HALOGEN_IMAGE:-unknown})"
+    echo "Image:     $(booted_ref)"
+    echo "Digest:    $(field booted digest)"
+    echo "Built:     $(field booted timestamp)"
+    echo "Next boot: $(describe staged || echo "no change staged")"
+    echo "Rollback:  $(describe rollback || echo "none")"
+    ;;
+  upgrade)
+    [ -n "$(channel)" ] || echo "Note: this image is pinned to one release, so only a rebuild of it can show up. To follow new releases: sudo halosctl switch <channel>"
+    if [ "$check" = 1 ]; then bootc upgrade --check; exit 0; fi
+    from="$(describe booted)"; before="$(field staged digest)"
+    bootc upgrade
+    after="$(status_json=""; field staged digest)"
+    if [ -z "$after" ] || [ "$after" = "$before" ]; then echo "No new update was staged."; exit 0; fi
+    status_json=""
+    record upgrade "$from" "$(describe staged)"
+    finish
+    ;;
+  switch)
+    [ "${#args[@]}" = 1 ] || die "which channel? alpha, beta, rc, release or edge"
+    case "${args[0]}" in
+      alpha|beta|rc|edge) ch="${args[0]}" ;;
+      release|stable|latest) ch=stable ;;
+      *) die "unknown channel ${args[0]}: use alpha, beta, rc, release or edge" ;;
+    esac
+    [ "$ch" != "$(channel)" ] || { echo "Already on $ch. For its newest release: sudo halosctl upgrade"; exit 0; }
+    switch_to switch "$(repo):$ch$suffix"
+    ;;
+  rollback)
+    if [ -n "$to" ]; then
+      [[ "$to" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)\.[0-9]+)?$ ]] || die "not a release: $to (such as 0.19.0-alpha.1)"
+      echo "This pins the machine to $to; follow a channel again later with: sudo halosctl switch <channel>"
+      switch_to rollback "$(repo):$to$suffix"
+      exit 0
+    fi
+    target="$(describe rollback)" || die "there is no previous image to go back to. Older releases: sudo halosctl history, then halosctl rollback --to <version>"
+    from="$(describe booted)"
+    echo "Now:   $from"
+    echo "After: $target"
+    confirm "Go back to it?"
+    bootc rollback
+    record rollback "$from" "$target"
+    finish
+    ;;
+  history)
+    if [ -s "$history" ]; then cat "$history"; else echo "No changes recorded yet. Changes made with halosctl are listed here."; fi
+    ;;
+  help|-h|--help) usage ;;
+  *) usage >&2; exit 2 ;;
+esac

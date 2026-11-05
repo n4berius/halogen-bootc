@@ -48,7 +48,7 @@ RUN dnf -y --setopt=install_weak_deps=False install \
       fwupd-plugin-modem-manager ModemManager-glib libqmi libmbim && \
     dnf clean all && \
     rm -rf /var/log/dnf5.log /var/lib/dnf /var/cache/libdnf5 /run/dnf && \
-    rpm -q fwupd amd-ucode-firmware realtek-firmware mt7xxx-firmware atheros-firmware && \
+    rpm -q fwupd skopeo jq amd-ucode-firmware realtek-firmware mt7xxx-firmware atheros-firmware && \
     ls -d /usr/lib/firmware/amdgpu /usr/lib/firmware/amdnpu
 
 COPY files/ /
@@ -70,14 +70,17 @@ RUN set -eu; \
       echo "$HALOGEN_LICENSE_SHA256  /usr/share/licenses/halogen/LICENSE.md"; \
       echo "$HALOGEN_NOTICES_SHA256  /usr/share/licenses/halogen/THIRD-PARTY-NOTICES.md"; } | sha256sum -c -
 
+# The halOS release (0.19.0-alpha.2, or 0.19.0-dev.<commit> for builds of main), for halosctl.
+ARG HALOS_RELEASE
 RUN set -eu; \
-    chmod 0755 /usr/bin/halogenctl /usr/bin/halogen-enroll-tpm /usr/libexec/halogen/*; \
+    chmod 0755 /usr/bin/halosctl /usr/bin/halogenctl /usr/bin/halogen-enroll-tpm /usr/libexec/halogen/*; \
     find /etc/containers/systemd/users/970 -type f -exec sed -i \
       -e "s|@HALOGEN_IMAGE@|${HALOGEN_IMAGE}|g" -e "s|@HALOGEN_VERSION@|${HALOGEN_VERSION}|g" {} +; \
     if grep -rq '@HALOGEN_' /etc/containers/systemd/users/970; then exit 1; fi; \
     { echo "HALOGEN_IMAGE=${HALOGEN_IMAGE}"; \
       echo "HALOGEN_VERSION=${HALOGEN_VERSION}"; \
       echo "HALOGEN_VARIANT=${HALOGEN_VARIANT}"; \
+      echo "HALOS_RELEASE=${HALOS_RELEASE}"; \
       echo "HALOGEN_WEIGHTS_REPO=${HALOGEN_WEIGHTS_REPO}"; \
       echo "HALOGEN_WEIGHTS_REVISION=${HALOGEN_WEIGHTS_REVISION}"; } > /usr/share/halogen/release.env; \
     echo 'halogen:524288:65536' >> /etc/subuid; \

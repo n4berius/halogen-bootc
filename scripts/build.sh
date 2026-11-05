@@ -8,6 +8,9 @@ cd "$(dirname "$0")/.."
 VARIANT="${HALOGEN_VARIANT:-npu}"
 TAG="$(scripts/image-ref.sh)"
 SOURCE=ghcr.io/peonist-ai/halogen-flash-server
+# The halOS release this image is: the release's tag, or <version>-dev.<commit> for other builds.
+if [ -n "${IMAGE_TAG:-}" ] && [ "$IMAGE_TAG" != edge ]; then RELEASE="$IMAGE_TAG"
+else RELEASE="$HALOGEN_VERSION-dev.$(git rev-parse --short=7 HEAD 2>/dev/null || echo local)"; fi
 
 if [ -z "$HALOGEN_DIGEST" ]; then
   HALOGEN_DIGEST="$(skopeo inspect --format '{{.Digest}}' "docker://$SOURCE:$HALOGEN_VERSION")"
@@ -20,13 +23,14 @@ esac
 
 podman build --pull=newer -t "$TAG" \
   --label "org.opencontainers.image.source=https://github.com/n4berius/halos-flash" \
-  --label "org.opencontainers.image.version=$HALOGEN_VERSION" \
+  --label "org.opencontainers.image.version=$RELEASE" \
   --build-arg "FEDORA_BOOTC_IMAGE=$FEDORA_BOOTC_IMAGE" \
   --build-arg "DEBIAN_IMAGE=$DEBIAN_IMAGE" \
   --build-arg "XRT_MIN_VERSION=$XRT_MIN_VERSION" \
   --build-arg "HALOGEN_IMAGE=$SOURCE@$HALOGEN_DIGEST" \
   --build-arg "HALOGEN_VERSION=$HALOGEN_VERSION" \
   --build-arg "HALOGEN_VARIANT=$VARIANT" \
+  --build-arg "HALOS_RELEASE=$RELEASE" \
   --build-arg "HALOGEN_SOURCE_COMMIT=$HALOGEN_SOURCE_COMMIT" \
   --build-arg "HALOGEN_CLOCK_SHA256=$HALOGEN_CLOCK_SHA256" \
   --build-arg "HALOGEN_LICENSE_SHA256=$HALOGEN_LICENSE_SHA256" \
@@ -34,4 +38,4 @@ podman build --pull=newer -t "$TAG" \
   --build-arg "HALOGEN_WEIGHTS_REPO=$HALOGEN_WEIGHTS_REPO" \
   --build-arg "HALOGEN_WEIGHTS_REVISION=$HALOGEN_WEIGHTS_REVISION" \
   .
-echo "Built $TAG with Halogen $HALOGEN_VERSION ($HALOGEN_DIGEST)"
+echo "Built $TAG (halOS $RELEASE) with Halogen $HALOGEN_VERSION ($HALOGEN_DIGEST)"

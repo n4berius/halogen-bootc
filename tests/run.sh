@@ -5,10 +5,12 @@ cd "$(dirname "$0")/.."
 tests/static.sh
 tests/config.sh
 tests/release-info.sh
+tests/channels.sh
 tests/needs-build.sh
 tests/first-boot.sh
 tests/preflight.sh
 tests/halogen-update.sh
 tests/model-pull.sh
 tests/selftest.sh
+tests/halosctl.sh
 echo "all checks passed"

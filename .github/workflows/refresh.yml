@@ -26,6 +26,8 @@ jobs:
         run: |
           tag="$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+(-r[0-9]+)?$' | head -1 || true)"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          # Worked out with main's scripts, before checking out the release.
+          [ -z "$tag" ] || echo "channels=$(scripts/channels.sh "$tag")" >> "$GITHUB_OUTPUT"
       - if: steps.stable.outputs.tag != ''
         run: git checkout "${{ steps.stable.outputs.tag }}"
       - name: Rebuild and push
@@ -35,4 +37,5 @@ jobs:
           export IMAGE_TAG="$image_tag"
           scripts/build.sh
           echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u "${{ github.actor }}" --password-stdin
-          scripts/push-image.sh stable
+          # One channel per call, which the push script of older releases also accepts.
+          for channel in ${{ steps.stable.outputs.channels }}; do scripts/push-image.sh "$channel"; done
