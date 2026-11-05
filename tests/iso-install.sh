@@ -76,6 +76,7 @@ if [ -n "$luks" ]; then
   pid=$!
   python3 "$here/vm-login.py" "$out/monitor.sock" "$out/secondboot.log" "$out" tpm
   cat "$out/report.txt"
-  grep -qi 'systemd-tpm2' "$out/report.txt" || { echo "no TPM token on the LUKS volume" >&2; exit 1; }
+  tokens="$(grep -cE '^[[:space:]]*[0-9]+: systemd-tpm2' "$out/report.txt" || true)"
+  [ "$tokens" = 1 ] || { echo "expected one TPM token on the LUKS volume, found $tokens" >&2; exit 1; }
   echo "TPM unlock verified"
 fi

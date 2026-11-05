@@ -4,5 +4,8 @@
 set -euo pipefail
 device="${1:-$(awk 'NR == 1 && $2 ~ /^UUID=/ { print "/dev/disk/by-uuid/" substr($2, 6) }' /etc/crypttab)}"
 [ -n "$device" ] || { echo "no LUKS device found in /etc/crypttab; name it as an argument" >&2; exit 1; }
-systemd-cryptenroll --tpm2-device=auto --tpm2-pcrs=7 "$device"
+# Running this again, after a BIOS or Secure Boot change, replaces the old TPM binding:
+# cryptenroll enrolls the new one first, then wipes the others, so a failure leaves the
+# old binding in place. The passphrase slot is never touched.
+systemd-cryptenroll --wipe-slot=tpm2 --tpm2-device=auto --tpm2-pcrs=7 "$device"
 echo "Enrolled $device. Keep the passphrase as your recovery key, then reboot."

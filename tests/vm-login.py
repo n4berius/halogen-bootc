@@ -80,7 +80,9 @@ report = log.split("RESULT-START")[-1].split("RESULT-END")[0]
 
 if mode == "luks-enroll":
     # Exactly what INSTALL.md tells people to run; PASSWORD answers the passphrase prompt.
-    typed("PASSWORD=halogentest halogen-enroll-tpm > /dev/ttyS0 2>&1; echo ENROLL-RC=$? > /dev/ttyS0\n")
+    # Twice, as after a BIOS update: the second run must replace the first binding, not add one.
+    typed("{ PASSWORD=halogentest halogen-enroll-tpm && PASSWORD=halogentest halogen-enroll-tpm; } "
+          "> /dev/ttyS0 2>&1; echo ENROLL-RC=$? > /dev/ttyS0\n")
     log = wait_serial("ENROLL-RC=", 120)
     tail = log.split("RESULT-END")[-1]
     print(tail)

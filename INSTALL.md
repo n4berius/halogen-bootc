@@ -193,8 +193,11 @@ sudo halogen-enroll-tpm
 sudo systemctl reboot
 ```
 
-Keep the passphrase as your recovery key. TPM unlock uses PCR 7, so changing Secure Boot
-settings means entering the passphrase and running `halogen-enroll-tpm` again. The CI install
+Keep the passphrase as your recovery key. TPM unlock uses PCR 7, which records the Secure Boot
+state. OS updates and rollbacks don't change it. Turning Secure Boot off or on, changing its
+keys, clearing the TPM, and some BIOS or Secure Boot revocation-list updates do. After one of
+those, boot asks for the passphrase. Enter it, then run `halogen-enroll-tpm` again. It replaces
+the old TPM binding rather than adding another. The CI install
 test enrolls the TPM and reboots without a passphrase, but this hasn't been confirmed on
 hardware yet. If the next boot still asks for the passphrase, report it.
 
