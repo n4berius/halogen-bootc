@@ -168,6 +168,11 @@ if have systemctl; then
   case "$state" in
     active) say PASS server "Halogen is running" ;;
     activating) say WARN server "Halogen is starting or downloading; see sudo halogenctl fetch-logs" ;;
+    # Just after boot Halogen waits, inactive, with a start queued until the fetch step is done.
+    inactive) if [ -n "$(user show -p Job --value halogen.service)" ] ||
+                 [ "$(user is-active halogen-fetch.service)" = activating ]; then
+                say WARN server "Halogen is waiting for the download and check step; run this again in a few minutes"
+              else say FAIL server "Halogen is stopped; start it with sudo halogenctl start, see sudo halogenctl logs"; fi ;;
     *) say FAIL server "Halogen is $state; see sudo halogenctl logs" ;;
   esac
 fi
