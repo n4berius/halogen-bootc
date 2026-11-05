@@ -14,8 +14,15 @@ case "$1" in
   status) cat "$FAKE/status.json" ;;
   upgrade) [ "${2:-}" = --check ] && { echo "Update available"; exit 0; }
            [ ! -f "$FAKE/next.json" ] || cp "$FAKE/next.json" "$FAKE/status.json" ;;
+  # Stages what the registry has under that name: FAKE_PUSHED_DIGEST when it moved meanwhile.
+  switch) jq --arg r "$2" --arg d "${FAKE_PUSHED_DIGEST:-sha256:feed}" ".status.staged = {image: {image: {image: \$r},
+            version: \"0.19.0-beta.1\", imageDigest: \$d, timestamp: \"2026-11-06T00:00:00Z\"}}" \
+            "$FAKE/status.json" > "$FAKE/s.tmp" && mv "$FAKE/s.tmp" "$FAKE/status.json" ;;
 esac'
-f skopeo 'echo "skopeo $*" >> "$FAKE/log"; case "$*" in *:beta|*:stable-no-npu|*:0.19.0-alpha.1) echo "sha256:feed 0.19.0-beta.1" ;; *) exit 1 ;; esac'
+f skopeo 'echo "skopeo $*" >> "$FAKE/log"; case "$*" in
+  *:beta|*:stable-no-npu|*:0.19.0-alpha.1) printf "sha256:feed 0.19.0-beta.1%s\n" "${FAKE_LABEL_TAIL:-}" ;;
+  *:edge) echo "Error: reading manifest edge: 403 Forbidden" >&2; exit 1 ;;
+  *) echo "Error: manifest unknown" >&2; exit 1 ;; esac'
 f systemctl 'echo "systemctl $*" >> "$FAKE/log"; case "$*" in *is-active*) echo "${FAKE_FETCH:-inactive}" ;; esac'
 dep() { printf '{"image":{"image":{"image":"%s","transport":"registry"},"version":"%s","timestamp":"2026-11-05T16:58:48Z","imageDigest":"%s"}}' "$@"; }
 host() { printf '{"status":{"booted":%s,"staged":%s,"rollback":%s}}' "$1" "${2:-null}" "${3:-null}"; }
@@ -34,6 +41,12 @@ has '^Rollback: +ghcr.io/n4berius/halogen-flash-bootc:0.18.23-alpha.2 \(0.18.23\
 has '^Next boot: +no change staged' "$work/out"
 echo HALOS_RELEASE=0.19.0-alpha.1 >> "$work/release.env"
 "$ctl" > "$work/out"; has '^halOS 0\.19\.0-alpha\.1,' "$work/out"
+host "$(dep ghcr.io/n4berius/halos-flash:0.19.0-alpha.1 '0.19.0\u001b[2J' sha256:aaa)" > "$work/s.json"
+cp "$work/status.json" "$work/keep.json"; cp "$work/s.json" "$work/status.json"
+sed -i '/^HALOS_RELEASE/d' "$work/release.env"; "$ctl" version > "$work/out"
+if grep -q $'\e' "$work/out"; then echo "an escape code from bootc status got through" >&2; exit 1; fi
+has '^halOS 0\.19\.0\[2J,' "$work/out"
+echo HALOS_RELEASE=0.19.0-alpha.1 >> "$work/release.env"; cp "$work/keep.json" "$work/status.json"
 ok "version shows the release, edition, channel and rollback image"
 
 if FAKE_UID=1000 "$ctl" version > "$work/out" 2>&1; then echo "ran without root" >&2; exit 1; fi
@@ -43,16 +56,25 @@ if "$ctl" switch beta < /dev/null > "$work/out" 2>&1; then echo "switched withou
 has 'add --yes' "$work/out"; hasnt 'bootc switch' "$work/log"
 if "$ctl" switch gamma --yes > "$work/out" 2>&1; then echo "took an unknown channel" >&2; exit 1; fi
 if "$ctl" switch rc --yes > "$work/out" 2>&1; then echo "switched to a missing image" >&2; exit 1; fi
-has 'not found' "$work/out"; hasnt 'bootc switch' "$work/log"
+has 'manifest unknown' "$work/out"; has 'Is there a release for it yet' "$work/out"; hasnt 'bootc switch' "$work/log"
+if "$ctl" switch edge --yes > "$work/out" 2>&1; then echo "switched past a registry error" >&2; exit 1; fi
+has '403 Forbidden' "$work/out"
 if "$ctl" rollback --to '0.19; reboot' --yes > "$work/out" 2>&1; then echo "took a bad version" >&2; exit 1; fi
 [ ! -e "$work/history" ] || { echo "history written for refused changes" >&2; exit 1; }
-ok "it needs root, a confirmation, a known channel and an image that exists"
+ok "it needs root, a confirmation, a known channel and an image that exists, and shows registry errors"
 
 "$ctl" switch beta --yes > "$work/out"
 has '^bootc switch ghcr.io/n4berius/halos-flash:beta$' "$work/log"
 has 'next reboot' "$work/out"; hasnt 'systemctl reboot' "$work/log"
 has 'switch +ghcr.io/n4berius/halos-flash:0.19.0-alpha.1 \(0.19.0\) -> ghcr.io/n4berius/halos-flash:beta \(0.19.0-beta.1\) +\(by owner\)' "$work/history"
-ok "switch beta stages the beta image, records it, and waits for a reboot"
+host "$(dep ghcr.io/n4berius/halos-flash:0.19.0-alpha.1 0.19.0 sha256:aaa)" null \
+  "$(dep ghcr.io/n4berius/halogen-flash-bootc:0.18.23-alpha.2 0.18.23 sha256:old)" > "$work/base.json"
+cp "$work/base.json" "$work/status.json"
+FAKE_PUSHED_DIGEST=sha256:moved FAKE_LABEL_TAIL=$'\e[2J' "$ctl" switch beta --yes > "$work/out"
+has 'changed in the registry' "$work/out"
+if grep -q $'\e' "$work/out" "$work/history"; then echo "an escape code from a label got through" >&2; exit 1; fi
+sed -i '$d' "$work/history"; cp "$work/base.json" "$work/status.json"
+ok "switch beta stages the beta image, records it, and waits for a reboot; a moved tag is reported"
 
 sed -i 's/=npu/=no-npu/' "$work/release.env"
 "$ctl" switch release --yes --reboot > "$work/out"
@@ -61,16 +83,17 @@ has '^bootc switch ghcr.io/n4berius/halos-flash:stable-no-npu$' "$work/log"; has
 FAKE_FETCH=activating "$ctl" switch release --yes --reboot > "$work/out"
 has 'Not rebooting' "$work/out"; hasnt '^systemctl reboot$' "$work/log"
 sed -i 's/=no-npu/=npu/' "$work/release.env"
+cp "$work/base.json" "$work/status.json"
 ok "release means stable, the no-NPU edition keeps its suffix, and no reboot during a download"
 
 "$ctl" rollback --yes > "$work/out"
 has '^bootc rollback$' "$work/log"; has 'rollback .*-> ghcr.io/n4berius/halogen-flash-bootc:0.18.23-alpha.2' "$work/history"
 "$ctl" rollback --to 0.19.0-alpha.1 --yes > "$work/out"
-has '^bootc switch ghcr.io/n4berius/halos-flash:0.19.0-alpha.1$' "$work/log"; has 'pins' "$work/out"
+has '^bootc switch ghcr.io/n4berius/halos-flash@sha256:feed$' "$work/log"; has 'pins' "$work/out"
 host "$(dep ghcr.io/n4berius/halos-flash:0.19.0-alpha.1 0.19.0 sha256:aaa)" > "$work/status.json"
 if "$ctl" rollback --yes > "$work/out" 2>&1; then echo "rolled back to nothing" >&2; exit 1; fi
 has 'no previous image' "$work/out"
-ok "rollback goes to the previous image, --to to an exact release, and says when there is none"
+ok "rollback goes to the previous image, --to pins an exact release by digest, and says when there is none"
 
 host "$(dep ghcr.io/n4berius/halos-flash:beta 0.19.0-beta.1 sha256:bbb)" > "$work/status.json"
 "$ctl" version > "$work/out"; has '^Channel: +beta' "$work/out"
@@ -86,4 +109,8 @@ has 'upgrade .*:beta \(0.19.0-beta.1\) -> ghcr.io/n4berius/halos-flash:beta \(0.
 "$ctl" history > "$work/out"; [ "$(wc -l < "$work/out")" = 6 ] || { echo "an unchanged upgrade was recorded" >&2; exit 1; }
 host "$(dep ghcr.io/n4berius/halogen-flash-bootc:0.18.23-alpha.2 0.18.23 sha256:old)" > "$work/status.json"
 "$ctl" switch beta --yes > /dev/null; has '^bootc switch ghcr.io/n4berius/halos-flash:beta$' "$work/log"
+host "$(dep ghcr.io/n4berius/halos-flash:beta 0.19.0-beta.2 sha256:new)" > "$work/status.json"
+host "$(dep ghcr.io/n4berius/halos-flash:beta 0.19.0-beta.2 sha256:new)" \
+  "$(dep ghcr.io/n4berius/halos-flash:beta 0.19.0-beta.1 sha256:bbb | sed 's/2026-11-05T16/2026-11-01T16/')" > "$work/next.json"
+"$ctl" upgrade --yes > "$work/out"; has 'Warning: the staged image was built before' "$work/out"
 ok "upgrade stages the channel's newest release and records it; history lists every change; an old-name install switches to halos-flash"

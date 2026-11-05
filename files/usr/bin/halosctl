@@ -28,9 +28,11 @@ die() { echo "halosctl: $*" >&2; exit 1; }
 status_json=""
 status() { [ -n "$status_json" ] || status_json="$(bootc status --format=json --format-version=1)"; printf '%s' "$status_json"; }
 # Field of a deployment (booted, staged or rollback): ref, version, digest or timestamp.
+# Printable characters only: the version comes from the image's label.
 field() {
   status | jq -r --arg d "$1" --arg f "$2" '.status[$d] // empty | .image // empty |
-    {ref: .image.image, version: .version, digest: .imageDigest, timestamp: .timestamp}[$f] // empty'
+    {ref: .image.image, version: .version, digest: .imageDigest, timestamp: .timestamp}[$f] // empty' |
+    tr -cd '[:print:]'
 }
 describe() { local r v; r="$(field "$1" ref)"; v="$(field "$1" version)"; [ -n "$r" ] && echo "$r${v:+ ($v)}"; }
 
@@ -71,24 +73,33 @@ finish() {
     echo "It applies at the next reboot, which stops Halogen for a few minutes: sudo systemctl reboot"
   fi
 }
-# Exact digest and release of an image in the registry, or nothing if it doesn't exist.
+# Exact digest and release of an image in the registry, as "<digest> <release>".
 # Uses bootc's registry login, if there is one (a private package).
 remote() {
-  local auth=(); [ ! -r /etc/ostree/auth.json ] || auth=(--authfile /etc/ostree/auth.json)
-  skopeo inspect "${auth[@]}" --no-tags --format '{{.Digest}} {{index .Labels "org.opencontainers.image.version"}}' \
-    "docker://$1" 2>/dev/null || true
+  local auth=() out; [ ! -r /etc/ostree/auth.json ] || auth=(--authfile /etc/ostree/auth.json)
+  if ! out="$(skopeo inspect "${auth[@]}" --no-tags \
+      --format '{{.Digest}} {{index .Labels "org.opencontainers.image.version"}}' "docker://$1" 2>&1)"; then
+    printf '%s\n' "$out" | tr -cd '[:print:]\n' | tail -n 3 >&2
+    die "could not read $1 from the registry. Is there a release for it yet, and is the network up?"
+  fi
+  printf '%s' "$out" | tr -cd '[:print:]'
 }
-# Switch to another image, after showing from -> to and asking.
+# Switch to another image, after showing from -> to and asking. With "pin", switch to its
+# exact digest, so the machine stays on that build even if the tag is ever pushed again.
 switch_to() {
-  local what="$1" target="$2" info from
-  info="$(remote "$target")"
-  [ -n "$info" ] || die "$target was not found. Is there a release for it yet, and is the network up?"
+  local what="$1" target="$2" pin="${3:-}" info digest from staged
+  info="$(remote "$target")"; digest="${info%% *}"
   from="$(describe booted)"
   echo "Now:   $from"
   echo "After: $target (${info#* })"
   confirm "Switch to it?"
-  bootc switch "$target"
-  record "$what" "$from" "$target (${info#* })"
+  if [ -n "$pin" ]; then bootc switch "$(repo)@$digest"; else bootc switch "$target"; fi
+  status_json=""
+  staged="$(describe staged || echo "$target (${info#* })")"
+  if [ -n "$(field staged digest)" ] && [ "$(field staged digest)" != "$digest" ]; then
+    echo "Note: the image changed in the registry just now; staged instead: $staged"
+  fi
+  record "$what" "$from" "$staged"
   finish
 }
 
@@ -121,7 +132,7 @@ case "$cmd" in
     echo "Rollback:  $(describe rollback || echo "none")"
     ;;
   upgrade)
-    [ -n "$(channel)" ] || echo "Note: this image is pinned to one release, so only a rebuild of it can show up. To follow new releases: sudo halosctl switch <channel>"
+    [ -n "$(channel)" ] || echo "Note: this machine is pinned to one release, so an upgrade finds nothing newer. To follow new releases: sudo halosctl switch <channel>"
     if [ "$check" = 1 ]; then bootc upgrade --check; exit 0; fi
     from="$(describe booted)"; before="$(field staged digest)"
     bootc upgrade
@@ -129,6 +140,11 @@ case "$cmd" in
     if [ -z "$after" ] || [ "$after" = "$before" ]; then echo "No new update was staged."; exit 0; fi
     status_json=""
     record upgrade "$from" "$(describe staged)"
+    # ISO times sort as text. An older build means the channel moved back; say so before a reboot.
+    if [[ "$(field staged timestamp)" < "$(field booted timestamp)" ]]; then
+      echo "Warning: the staged image was built before the one running ($(field staged timestamp) vs $(field booted timestamp))."
+      echo "Its channel may have moved back. Check with sudo halosctl version before rebooting."
+    fi
     finish
     ;;
   switch)
@@ -145,7 +161,7 @@ case "$cmd" in
     if [ -n "$to" ]; then
       [[ "$to" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)\.[0-9]+)?$ ]] || die "not a release: $to (such as 0.19.0-alpha.1)"
       echo "This pins the machine to $to; follow a channel again later with: sudo halosctl switch <channel>"
-      switch_to rollback "$(repo):$to$suffix"
+      switch_to rollback "$(repo):$to$suffix" pin
       exit 0
     fi
     target="$(describe rollback)" || die "there is no previous image to go back to. Older releases: sudo halosctl history, then halosctl rollback --to <version>"
