@@ -19,7 +19,7 @@ text
 lang en_US.UTF-8
 keyboard us
 timezone Etc/UTC --utc
-rootpw --plaintext halogentest
+rootpw --plaintext halogentest --allow-ssh
 zerombr
 clearpart --all --initlabel
 autopart --type=lvm$luks
@@ -70,7 +70,9 @@ grep -q 'halogen-fetch:' "$out/report.txt"
 # halosctl reads bootc's status and the image's release file on a real install.
 grep -qE "^halOS [0-9]+\.[0-9]+\.[0-9]+.*, $variant edition" "$out/report.txt" || { echo "halosctl version failed" >&2; exit 1; }
 grep -qE '^Image: +[a-z]' "$out/report.txt" || { echo "halosctl did not read bootc status" >&2; exit 1; }
-# Root never logs in over SSH (files/etc/ssh/sshd_config.d/00-halos.conf), as sshd itself reports.
+# Root never logs in over SSH (files/etc/ssh/sshd_config.d/00-halos.conf), as sshd itself reports,
+# even with the installer's "allow root SSH" (rootpw --allow-ssh above) also written.
+grep -q '01-permitrootlogin.conf' "$out/report.txt" || { echo "the installer did not write its allow-root file" >&2; exit 1; }
 grep -qx 'permitrootlogin no' "$out/report.txt" || { echo "sshd allows root logins" >&2; exit 1; }
 echo "installed system verified"
 

@@ -71,8 +71,7 @@ typed("{ echo RESULT-START; cat /proc/cmdline; dmesg | grep -i secure; bootctl s
       "lsblk -f | grep -i crypto; "
       "for d in $(lsblk -rno PATH,FSTYPE | awk '$2==\"crypto_LUKS\"{print $1}'); do cryptsetup luksDump $d | grep -i systemd-tpm2; done; vgs --noheadings -o vg_name; findmnt -rn -o TARGET,SOURCE -t xfs; sestatus | head -3; id halogen; loginctl show-user halogen -p Linger; "
       "systemctl status user@970.service --no-pager | head -4; journalctl --no-pager -n 8 -o cat _SYSTEMD_USER_UNIT=halogen-fetch.service; systemctl --failed --no-legend --no-pager; "
-      "systemctl is-active firewalld halogen-prepare; halosctl version; sshd -T | grep -i permitrootlogin; echo RESULT-END; } > /dev/ttyS0 2>&1
-")
+      "systemctl is-active firewalld halogen-prepare; halosctl version; ls /etc/ssh/sshd_config.d; sshd -T | grep -i permitrootlogin; echo RESULT-END; } > /dev/ttyS0 2>&1\n")
 
 def wait_serial(marker, seconds):
     deadline = time.time() + seconds
