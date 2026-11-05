@@ -186,8 +186,9 @@ Please confirm these on the first install:
 - `systemctl --failed` is clean. Upstream warns `systemd-remount-fs.service` can fail on
   Anaconda-installed bootc systems. It stayed clean in our VM test.
 - `ls -l /dev/kfd /dev/dri/renderD*` shows group `halogen`.
-- `sudo journalctl -k -b | grep 'avc: *denied'` prints nothing. If `/dev/kfd` shows
-  `denied { map }`, run `sudo setsebool -P container_use_devices true`.
+- `sudo journalctl -b _TRANSPORT=audit + _TRANSPORT=kernel | grep 'avc: *denied'` prints
+  nothing. If `/dev/kfd` shows `denied { map }`, run
+  `sudo setsebool -P container_use_devices true`.
 - A soak test mixes your real load for several hours. Kernel 7.2 has a reported GPU memory
   fault, and Halogen's reference host ran 7.1.8.
 

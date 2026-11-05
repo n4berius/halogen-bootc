@@ -26,20 +26,20 @@ echo 'BOOT_IMAGE=x amdgpu.gttsize=126976 ttm.pages_limit=32505856 iommu=pt' > "$
 printf 'HALOGEN_VARIANT=npu\nHALOGEN_VERSION=9.9.9\nHALOGEN_WEIGHTS_REVISION=abc\n' > "$work/release.env"
 
 f() { printf '#!/bin/bash\n%s\n' "$2" > "$fake/$1"; chmod +x "$fake/$1"; }
-f mokutil 'echo "SecureBoot enabled"'
-f getenforce 'echo Enforcing'
+f mokutil 'echo "SecureBoot ${FAKE_SB:-enabled}"'
+f getenforce 'echo "${FAKE_SELINUX:-Enforcing}"'
 f journalctl 'cat "$FAKE/kernel.log" 2>/dev/null; true'
-f firewall-cmd 'case "$1" in --get-default-zone) echo FedoraServer ;; *) cat "$FAKE/services" ;; esac'
+f firewall-cmd 'case "$1" in --state) echo "${FAKE_FIREWALL:-running}" ;; --get-default-zone) echo FedoraServer ;; *) cat "$FAKE/services" ;; esac'
 f lsblk 'echo "/dev/nvme0n1p3 crypto_LUKS"'
 f cryptsetup 'printf "Tokens:\n  0: systemd-tpm2\n"'
-f amd-smi 'echo "GPU: 0"'
+f amd-smi 'if [ -n "${FAKE_NOGPU:-}" ]; then echo "ERROR:root:Unable to detect any GPU devices"; exit 255; fi; printf "GPU: 0\n    BDF: 0000:c3:00.0\n"'
 f systemd-run 'echo "preflight: ok"'
 f bootc 'echo "Booted image: ghcr.io/n4berius/halogen-flash-bootc:9.9.9"'
-f systemctl 'case "$*" in *--failed*) cat "$FAKE/failed" 2>/dev/null ;; *) echo active ;; esac'
+f systemctl 'case "$*" in *--failed*) cat "$FAKE/failed" 2>/dev/null ;; *) echo "${FAKE_STATE:-active}" ;; esac'
 f fabric-clock 'exit 0'
 # Group, owner and label as the real image sets them.
 f stat 'case "$2" in %G|%U) echo halogen ;; %C) case "$3" in *accel*) echo system_u:object_r:dri_device_t:s0 ;; *) echo system_u:object_r:container_file_t:s0 ;; esac ;; *) exec /usr/bin/stat "$@" ;; esac'
-f curl 'echo "curl $*" >> "$FAKE/curl.log"; case "$*" in *models*) echo "{\"data\":[{\"id\":\"halogen-qwen3.8-flash-next\"},{\"id\":\"qwen3.5-2b\"}]}" ;; *) printf 200 ;; esac'
+f curl 'echo "curl $*" >> "$FAKE/curl.log"; case "$*" in *models*) echo "{\"data\":[{\"id\":\"halogen-qwen3.8-flash-next\"},{\"id\":\"qwen3.5-2b\"}]}" ;; *::1*) [ -n "${FAKE_NOIPV6:-}" ] && printf 000 || printf 200 ;; *) printf 200 ;; esac'
 echo "halogen" > "$work/services"
 
 export PATH="$fake:$sysbin" HALOGEN_RELEASE_FILE="$work/release.env" HALOGEN_SYSFS="$work/sys" \
@@ -69,16 +69,21 @@ expect '^SKIP secure-boot:'; expect '^Summary:'
 ok "a missing tool is skipped, and the rest still runs"
 
 echo "public" > "$work/services"
-printf 'audit: type=1400 avc:  denied  { map } for comm="halogen" tcontext=system_u:object_r:kfd_device_t:s0\n' > "$work/kernel.log"
+cat > "$work/kernel.log" <<'L'
+audit: type=1400 audit(1.2:3): avc:  denied  { map } for  pid=9 comm="halogen" path="/dev/kfd" dev="devtmpfs" scontext=system_u:system_r:container_t:s0 tcontext=system_u:object_r:kfd_device_t:s0 tclass=chr_file
+audit: type=1400 audit(1.2:4): avc:  denied  { map } for  pid=9 comm="halogen" path="/dev/kfd" dev="devtmpfs" scontext=system_u:system_r:container_t:s0 tcontext=system_u:object_r:kfd_device_t:s0 tclass=chr_file
+audit: type=1400 audit(1.2:5): avc:  denied  { recv } for  saddr=192.168.1.50 src=51234 daddr=192.168.1.10 dest=8731 netif=enp1s0 scontext=system_u:system_r:container_t:s0 tcontext=system_u:object_r:unlabeled_t:s0 tclass=packet
+L
 if "$selftest" > "$work/out" 2>&1; then echo "failures still exited 0" >&2; exit 1; fi
-expect '^FAIL firewall:'; expect '^FAIL selinux-denials:'; expect 'kfd_device_t'
-ok "a closed port and SELinux denials fail, with the denial shown"
+expect '^FAIL firewall:'; expect '^FAIL selinux-denials: 2 different'; expect 'kfd_device_t'; expect 'tclass=packet'
+refuse '192\.168|saddr|path=|pid='
+ok "a closed port and SELinux denials fail, each denial once, with no paths or addresses"
 echo "halogen" > "$work/services"; rm "$work/kernel.log"
 
 mkdir -p "$work/models/npu/0.18.23"
 echo 'ath11k_pci: Direct firmware load for ath11k/WCN6855 failed with error -2' > "$work/kernel.log"
 "$selftest" > "$work/out" 2>&1 || true
-expect '^WARN npu-folder:.*0\.18\.23'; expect '^WARN firmware:'
+expect '^WARN npu-folder:.*0\.18\.23'; expect '^WARN firmware:'; expect '^ +ath11k/WCN6855$'
 ok "leftover version folders and missing firmware are reported"
 rm -r "$work/models/npu/0.18.23" "$work/kernel.log"
 
@@ -89,3 +94,18 @@ rm "$work/dev/accel/accel0"
 expect '^PASS kernel-iommu:.*amd_iommu=off'
 refuse 'npu-device|fabric-clock|folder-LFM'
 ok "the no-NPU edition expects amd_iommu=off and skips the NPU checks"
+
+f mokutil 'echo "SecureBoot ${FAKE_SB:-enabled}"'
+f amd-smi 'if [ -n "${FAKE_NOGPU:-}" ]; then echo "ERROR:root:Unable to detect any GPU devices"; exit 255; fi; echo "GPU: 0"'
+printf 'HALOGEN_VARIANT=npu\n' > "$work/release.env"
+echo 'BOOT_IMAGE=x ttm.pages_limit=32505856 iommu=pt amd_iommu=off' > "$work/cmdline"
+printf 'MemTotal: 60000000 kB\n' > "$work/meminfo"
+echo 'halogen-fabric-clock.service loaded failed failed Hold the clock' > "$work/failed"
+if FAKE_SB=disabled FAKE_SELINUX=Permissive FAKE_STATE=inactive FAKE_NOGPU=1 FAKE_NOIPV6=1 FAKE_FIREWALL=not-running \
+    "$selftest" > "$work/out" 2>&1; then echo "an unhealthy machine passed" >&2; exit 1; fi
+for line in 'WARN secure-boot' 'FAIL kernel-amdgpu.gttsize' 'FAIL kernel-iommu-off' 'FAIL memory' \
+  'FAIL failed-units:.*halogen-fabric-clock' 'WARN selinux' 'FAIL firewall: firewalld is not running' \
+  'WARN amd-smi' 'FAIL npu-device' 'FAIL prepare' 'FAIL server' 'WARN api-ipv6'; do
+  expect "^$line"
+done
+ok "an unhealthy machine gets a FAIL or WARN for each problem"

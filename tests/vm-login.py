@@ -87,7 +87,10 @@ report = log.split("RESULT-START")[-1].split("RESULT-END")[0]
 (out / "report.txt").write_text(re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", report))
 # The same self-check people run on hardware. A VM has no GPU, so some checks fail here;
 # iso-install.sh checks the ones a VM can pass.
-typed("halogenctl selftest > /dev/ttyS0 2>&1; echo SELFTEST-RC=$? > /dev/ttyS0\n")
+# The real API key is compared inside the VM (grep -f never prints it); only a marker leaves.
+typed("halogenctl selftest > /tmp/st 2>&1; rc=$?; cat /tmp/st > /dev/ttyS0; "
+      "grep -qF -f /srv/configs/api-key /tmp/st && echo SELFTEST-LEAK > /dev/ttyS0; "
+      "echo SELFTEST-RC=$rc > /dev/ttyS0\n")
 log = wait_serial("SELFTEST-RC=", 300)
 selftest = log.split("RESULT-END")[-1].split("SELFTEST-RC=")[0]
 (out / "selftest.txt").write_text(re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", selftest))

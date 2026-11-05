@@ -77,11 +77,11 @@ selftest_has 'PASS kernel-amdgpu.gttsize:'
 selftest_has 'PASS kernel-iommu:'
 selftest_has 'PASS firewall:'
 selftest_has 'PASS prepare:'
-selftest_has 'PASS npu-folder:'
 if [ "$variant" = npu ]; then
+  selftest_has 'PASS npu-folder:'
   for f in decider LFM custom; do selftest_has "PASS folder-$f:"; done
 fi
-if grep -qE 'SECRET|Bearer|hf_' "$out/selftest.txt"; then echo "selftest printed something private" >&2; exit 1; fi
+if grep -qE 'SELFTEST-LEAK|Bearer' "$out/selftest.txt"; then echo "selftest printed the API key" >&2; exit 1; fi
 echo "selftest verified"
 
 if [ -n "$luks" ]; then

@@ -77,21 +77,28 @@ if have getenforce; then
   else say WARN selinux "SELinux is $mode"; fi
 fi
 if have journalctl; then
-  # The image has no audit daemon, so denials are in the kernel log.
-  out="$(run journalctl -k -b --no-pager -o cat | grep -E 'avc: +denied' || true)"
-  if [ -z "$out" ]; then say PASS selinux-denials "no SELinux denials since boot"
+  # The image has no audit daemon: journald keeps the audit records, and the kernel log may hold
+  # copies. Only the denial, the program and the SELinux types are shown, never paths or
+  # addresses, and a denial logged twice counts once.
+  out="$(run journalctl -b --no-pager -o cat _TRANSPORT=audit + _TRANSPORT=kernel)"
+  denials="$(printf '%s\n' "$out" | grep -E 'avc: +denied' | while IFS= read -r l; do
+    printf '%s\n' "$l" | grep -oE 'avc: +denied +\{[^}]*\}|comm="[^"]*"|scontext=[^ ]+|tcontext=[^ ]+|tclass=[^ ]+' | paste -sd' ' -
+  done | sort -u)"
+  if [ -z "$denials" ]; then say PASS selinux-denials "no SELinux denials since boot"
   else
-    say FAIL selinux-denials "$(printf '%s\n' "$out" | wc -l) denials since boot, for example:"
-    printf '%s\n' "$out" | sed -E 's/.*(avc: +denied[^}]*\}).*(comm="[^"]*").*(tcontext=[^ ]*).*/       \1 \2 \3/' | sort -u | head -n 5
+    say FAIL selinux-denials "$(printf '%s\n' "$denials" | wc -l) different denials since boot, for example:"
+    printf '%s\n' "$denials" | head -n 5 | sed 's/^/       /'
   fi
-  out="$(run journalctl -k -b --no-pager -o cat | grep -E 'Direct firmware load|failed to load firmware|firmware: failed' || true)"
-  if [ -z "$out" ]; then say PASS firmware "no missing firmware reported since boot"
+  missing="$(printf '%s\n' "$out" | sed -nE 's/.*[Ff]irmware load for ([^ ]+) failed.*/\1/p; s/.*failed to load (firmware )?([^ ]+).*/\2/p' | sort -u)"
+  if [ -z "$missing" ]; then say PASS firmware "no missing firmware reported since boot"
   else
     say WARN firmware "missing firmware reported (a removed firmware package may be needed):"
-    printf '%s\n' "$out" | grep -oE 'firmware [^ ]+|load [^ ]+ failed' | sort -u | head -n 8 | sed 's/^/       /'
+    printf '%s\n' "$missing" | head -n 8 | sed 's/^/       /'
   fi
 fi
-if have firewall-cmd; then
+if have firewall-cmd && [ "$(run firewall-cmd --state)" != running ]; then
+  say FAIL firewall "firewalld is not running: sudo systemctl start firewalld"
+elif have firewall-cmd; then
   zone="$(run firewall-cmd --get-default-zone)"
   services="$(run firewall-cmd --zone="$zone" --list-services)"
   case " $services " in *" halogen "*) say PASS firewall "port $port is open in the $zone zone (open: $services)" ;;
@@ -132,9 +139,9 @@ if [ -n "$render" ]; then
   else say FAIL gpu-render "$render belongs to group $g, not halogen"; fi
 else say FAIL gpu-render "no GPU render node in $dev/dri"; fi
 if have amd-smi; then
-  out="$(run amd-smi list)"
-  case "$out" in *GPU*) say PASS amd-smi "amd-smi sees the GPU" ;;
-    *) say WARN amd-smi "amd-smi sees no GPU: $(printf '%s\n' "$out" | tail -n 1)" ;; esac
+  out="$(run amd-smi list)"; rc=$?
+  if [ "$rc" = 0 ] && [[ $'\n'"$out" == *$'\n'"GPU: "[0-9]* ]]; then say PASS amd-smi "amd-smi sees the GPU"
+  else say WARN amd-smi "amd-smi sees no GPU: $(printf '%s\n' "$out" | tail -n 1 | cut -c1-120)"; fi
 fi
 if [ "$npu" = 1 ]; then
   if [ -e "$dev/accel/accel0" ]; then
@@ -168,32 +175,36 @@ else say WARN models "the models are not all downloaded yet; see sudo halogenctl
 if have systemd-run; then
   out="$(run systemd-run --machine=halogen@.host --user --pipe --wait --quiet --setenv=HALOGEN_SERVER_RUNNING="${running:-0}" /usr/libexec/halogen/preflight)"
   case "$out" in *"preflight: ok"*) say PASS preflight "Halogen's own host checks pass" ;;
-    *) say FAIL preflight "$(printf '%s' "$out" | grep -E 'FAIL|warning' | paste -sd';' - | cut -c1-200)" ;; esac
+    *) why="$(printf '%s\n' "$out" | grep -E 'FAIL|warning' | paste -sd';' -)"
+       say FAIL preflight "$(printf '%s' "${why:-$(printf '%s\n' "$out" | tail -n 1)}" | cut -c1-200)" ;; esac
 fi
 
 health() { curl -sS -g -m 5 -o /dev/null -w '%{http_code}' "http://$1:$port/health" 2>/dev/null; }
 if have curl; then
   code="$(health 127.0.0.1)"
+  # While Halogen isn't running (first boot is still downloading), the API can't answer yet.
+  miss=FAIL; [ "${running:-0}" = 1 ] || miss=WARN
   if [ "$code" = 200 ]; then say PASS api-ipv4 "the API answers on 127.0.0.1:$port"
-  else say FAIL api-ipv4 "the API does not answer on 127.0.0.1:$port (${code:-no answer})"; fi
+  else say "$miss" api-ipv4 "the API does not answer on 127.0.0.1:$port (${code:-no answer})"; fi
   code="$(health '[::1]')"
   if [ "$code" = 200 ]; then say PASS api-ipv6 "the API answers on [::1]:$port"
   else say WARN api-ipv6 "the API does not answer on [::1]:$port (${code:-no answer}); fine if IPv6 is off"; fi
   if [ -r "$configs/api-key" ]; then
     # The key goes in a private file, so it never shows in the process list or the report.
-    header="$(mktemp)"; chmod 600 "$header"
+    header="$(mktemp)"; trap 'rm -f "$header"' EXIT
     printf 'Authorization: Bearer %s\n' "$(cat "$configs/api-key")" > "$header"
     out="$(curl -sS -m 10 -H @"$header" "http://127.0.0.1:$port/v1/models" 2>/dev/null)"
     rm -f "$header"
     ids="$(printf '%s' "$out" | python3 -c 'import json,sys; print(" ".join(m["id"] for m in json.load(sys.stdin)["data"]))' 2>/dev/null)"
     if [ -n "$ids" ]; then say PASS api-models "serving: $ids"
-    else say FAIL api-models "the API key was not accepted, or no models are served"; fi
+    else say "$miss" api-models "the API key was not accepted, or no models are served"; fi
   fi
 fi
 
 # --- Model folders
 old="$(find "$models/npu" -mindepth 1 -maxdepth 1 -type d -regex '.*/[0-9]+\.[0-9]+\.[0-9]+' -printf '%f ' 2>/dev/null)"
-if [ -z "$old" ]; then say PASS npu-folder "NPU models are in one folder"
+if [ "$npu" != 1 ] || [ ! -d "$models/npu" ]; then :
+elif [ -z "$old" ]; then say PASS npu-folder "NPU models are in one folder"
 else say WARN npu-folder "old version folders remain in $models/npu: $old(restart Halogen to move them)"; fi
 if [ "$npu" = 1 ]; then
   for f in decider LFM custom; do
