@@ -39,11 +39,6 @@ if have bootc; then
 fi
 echo
 
-# Machines installed before the rename to halOS follow an image name that gets no new builds.
-case "$images" in
-  *halogen-flash-bootc*) say WARN image-name "this machine follows the old image name, which gets no updates. Move it once: sudo bootc switch ghcr.io/n4berius/halos-flash:<tag> (see INSTALL.md)" ;;
-esac
-
 # --- Boot and kernel
 if have mokutil; then
   out="$(run mokutil --sb-state)"

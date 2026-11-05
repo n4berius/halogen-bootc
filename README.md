@@ -37,7 +37,7 @@ This project tracks the official
 [halogen-flash-server](https://github.com/peonist-ai/halogen-flash-server) and does not fork
 or change it.
 
-- Each image tag names the Halogen release it carries, such as `0.18.23`.
+- Each image tag names the Halogen release it carries, such as `0.19.0`.
 - `versions.env` pins that release, the commit it matches, and hashes for the files taken
   from it. The build then pins the container by digest.
 - The container runs unmodified, pulled from Halogen's own registry on first boot.
@@ -104,8 +104,8 @@ image tags. [RELEASING.md](RELEASING.md) defines them.
 
 | Use | Image tag |
 |---|---|
-| Recommended | `stable`, or a version such as `0.18.23` |
-| Testing a release | `beta`, `rc`, or an exact tag such as `0.18.23-beta.1` |
+| Recommended | `stable`, or a version such as `0.19.0` |
+| Testing a release | `beta`, `rc`, or an exact tag such as `0.19.0-beta.1` |
 | Earliest testing | `alpha` |
 | Newest `main` build | `edge` |
 
