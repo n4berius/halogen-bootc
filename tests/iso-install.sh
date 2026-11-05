@@ -73,7 +73,7 @@ grep -qE '^Image: +[a-z]' "$out/report.txt" || { echo "halosctl did not read boo
 # Root never logs in over SSH (files/etc/ssh/sshd_config.d/00-halos.conf), as sshd itself reports,
 # even with the installer's "allow root SSH" (rootpw --allow-ssh above) also written.
 grep -q '01-permitrootlogin.conf' "$out/report.txt" || { echo "the installer did not write its allow-root file" >&2; exit 1; }
-grep -qx 'permitrootlogin no' "$out/report.txt" || { echo "sshd allows root logins" >&2; exit 1; }
+grep -qix 'permitrootlogin no' "$out/report.txt" || { echo "sshd allows root logins" >&2; exit 1; }
 echo "installed system verified"
 
 # halogenctl selftest, as people run it on hardware. Only what a VM can pass is required.
