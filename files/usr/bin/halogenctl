@@ -15,7 +15,10 @@ case "${1:-status}" in
   doctor)
     # Runs under the service manager, so it sees the service's real limits.
     systemd-run --machine=halogen@.host --user --pipe --wait --quiet /usr/libexec/halogen/render-config >/dev/null
-    systemd-run --machine=halogen@.host --user --pipe --wait --quiet /usr/libexec/halogen/preflight
+    # While Halogen runs, the GTT it holds is expected, not a leftover from a crash.
+    running=0; ! unit --quiet is-active halogen.service || running=1
+    systemd-run --machine=halogen@.host --user --pipe --wait --quiet \
+      --setenv=HALOGEN_SERVER_RUNNING="$running" /usr/libexec/halogen/preflight
     ;;
   config)
     # Shows what Halogen receives. Ignored lines are explained above the list.

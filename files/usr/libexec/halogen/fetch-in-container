@@ -24,13 +24,21 @@ if [ ! -f "$root/tokenizer/tokenizer.json" ]; then
 fi
 
 ids=""
+unknown=""
 for id in ${NPU_MODELS//,/ }; do
   case "$id" in
     /*) echo "fetch: $id is your own model, so it is not downloaded"; continue ;;
   esac
-  [ -n "$(model_key "$id" repo)" ] || { echo "fetch: this image has no record of NPU model $id" >&2; exit 3; }
+  if [ -z "$(model_key "$id" repo)" ]; then unknown="$unknown $id"; continue; fi
   ids="$ids $id $(model_key "$id" devices)"
 done
+if [ -n "$unknown" ]; then
+  # Check every name before stopping, so one edit can fix them all.
+  for id in $unknown; do echo "fetch: this image has no record of NPU model $id" >&2; done
+  echo "fetch: NPU models this image can download (names are case-sensitive):" >&2
+  awk '$1 == "model" { print "fetch:   " $2 }' "$pins" >&2
+  exit 3
+fi
 
 for id in $(printf '%s\n' "$ids" | tr ' ' '\n' | awk 'NF && !seen[$0]++'); do
   dir="$root/npu/$id"

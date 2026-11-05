@@ -44,8 +44,11 @@ done
 for f in "$sysfs"/class/drm/card*/device/mem_info_gtt_used; do
   [ -r "$f" ] || continue
   used_gib=$(($(cat "$f") / 1073741824))
-  [ "$used_gib" -lt 10 ] \
-    || warn "$used_gib GiB of GTT is already in use. If no GPU process is running, reboot before starting"
+  if [ "${HALOGEN_SERVER_RUNNING:-0}" = 1 ]; then
+    echo "preflight: $used_gib GiB of GTT in use, by the running server"
+  elif [ "$used_gib" -ge 10 ]; then
+    warn "$used_gib GiB of GTT is already in use. If no GPU process is running, reboot before starting"
+  fi
 done
 
 [ "$failed" = 0 ] || exit 1

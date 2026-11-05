@@ -76,9 +76,11 @@ if "$work/fetch" >/dev/null 2>&1; then echo "verify failure was ignored" >&2; ex
 ok "a failed checkpoint check keeps the server from starting"
 rm "$work/fail-verify"
 
-echo 'HALOGEN_NPU_MODELS=nonsense' > "$work/config.env"; export FAKE_NPU=nonsense
-if "$work/fetch" >/dev/null 2>&1; then echo "unknown model was accepted" >&2; exit 1; fi
-ok "an unknown model stops with an error and does not retry forever"
+echo 'HALOGEN_NPU_MODELS=nonsense,embed,Rerank' > "$work/config.env"; export FAKE_NPU=nonsense,embed,Rerank
+if "$work/fetch" > "$work/out" 2>&1; then echo "unknown model was accepted" >&2; exit 1; fi
+grep -q 'no record of NPU model nonsense' "$work/out" && grep -q 'no record of NPU model Rerank' "$work/out"
+grep -q '^fetch:   rerank$' "$work/out"
+ok "unknown models are all named, with the valid names, and do not retry forever"
 
 echo 'HALOGEN_NPU_MODELS=' > "$work/config.env"
 if HALOGEN_MODELS_NEEDED_GIB=999999999 "$work/fetch" >/dev/null 2>&1; then echo "low disk was accepted" >&2; exit 1; fi

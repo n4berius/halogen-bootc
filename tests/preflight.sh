@@ -22,3 +22,14 @@ printf '#!/bin/sh\nexit 1\n' > "$work/clock"; expect_fail "an unheld fabric cloc
 printf '#!/bin/sh\nexit 0\n' > "$work/clock"
 HALOGEN_MEMLOCK=8192 expect_fail "limited memlock"
 if [ "$(id -u)" != 0 ]; then chmod 000 "$work/dev/kfd"; expect_fail "a GPU node it cannot open"; chmod 644 "$work/dev/kfd"; fi
+
+mkdir -p "$work/sys/class/drm/card0/device"
+echo $((20 * 1073741824)) > "$work/sys/class/drm/card0/device/mem_info_gtt_used"
+out="$(run 2>&1)"
+grep -q 'GTT is already in use' <<< "$out" || { echo "leftover GTT not reported" >&2; exit 1; }
+echo "ok: warns about GTT left in use"
+out="$(HALOGEN_SERVER_RUNNING=1 run 2>&1)"
+if grep -q 'already in use' <<< "$out" || ! grep -q 'by the running server' <<< "$out"; then
+  echo "doctor warned about the running server's own GTT" >&2; exit 1
+fi
+echo "ok: GTT held by the running server is not a warning"
