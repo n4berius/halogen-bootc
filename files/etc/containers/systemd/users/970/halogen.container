@@ -10,7 +10,9 @@ StartLimitBurst=3
 Image=@HALOGEN_IMAGE@
 Pull=never
 ContainerName=halogen
-PublishPort=8731:8731
+# IPv4 only: Halogen listens on IPv4, so an IPv6 forward (localhost is ::1 first) would
+# accept the connection and then reset it. With this, clients fall back to 127.0.0.1.
+PublishPort=0.0.0.0:8731:8731
 AddDevice=/dev/kfd
 AddDevice=/dev/dri
 Ulimit=memlock=-1:-1

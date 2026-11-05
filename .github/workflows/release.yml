@@ -100,9 +100,7 @@ jobs:
         run: |
           sudo chown -R "$USER" output
           name="halogen-flash-bootc-$TAG-$HALOGEN_VARIANT.iso"
-          mkdir assets
-          mv "$(find output -name '*.iso' | head -1)" "assets/$name"
-          (cd assets && sha256sum "$name" > "$name.sha256" && split -b 1900M -d "$name" "$name.part" && rm "$name")
+          scripts/package-iso.sh "$(find output -name '*.iso' | head -1)" assets "$name"
       - uses: actions/upload-artifact@v7
         with:
           name: iso-${{ matrix.variant }}

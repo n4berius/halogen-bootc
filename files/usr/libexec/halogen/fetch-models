@@ -9,6 +9,7 @@ models="${HALOGEN_MODELS_DIR:-/srv/models}"
 helper="${HALOGEN_FETCH_HELPER:-/usr/libexec/halogen/fetch-in-container}"
 needed_gib="${HALOGEN_MODELS_NEEDED_GIB:-125}"
 max_wait="${HALOGEN_RETRY_MAX_S:-300}"
+progress_s="${HALOGEN_PROGRESS_S:-60}"
 
 # shellcheck disable=SC1090
 . "$release"
@@ -42,6 +43,16 @@ if [ "$((${free_gib:-0} + ${have_gib:-0}))" -lt "$needed_gib" ]; then
   exit 1
 fi
 
+# The downloader prints nothing until a file is complete, so report the size on disk
+# (partial files included) every minute. 0 turns the report off.
+if [ "$progress_s" -gt 0 ]; then
+  while sleep "$progress_s" > /dev/null 2>&1; do
+    echo "halogen-fetch: $(du -s --block-size=1G "$models" 2>/dev/null | cut -f1) GiB of about $needed_gib GiB downloaded"
+  done &
+  reporter=$!
+  trap 'kill "$reporter" 2>/dev/null' EXIT
+fi
+
 wait_s=15
 while :; do
   podman run --rm --pull=never --read-only --tmpfs /tmp \
@@ -60,6 +71,7 @@ while :; do
   sleep "$wait_s"
   wait_s=$((wait_s * 2)); [ "$wait_s" -le "$max_wait" ] || wait_s="$max_wait"
 done
+[ -z "${reporter:-}" ] || kill "$reporter" 2>/dev/null
 
 # Halogen's own checker reads back the checkpoint that was downloaded.
 if ! podman run --rm --pull=never --device /dev/kfd --device /dev/dri --group-add keep-groups \

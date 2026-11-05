@@ -4,8 +4,29 @@ This guide covers a new install from USB, from choosing an edition to a working 
 For how Halogen itself behaves, see its
 [official documentation](https://github.com/peonist-ai/halogen-flash-server/tree/main/docs).
 
-> Neither edition has been tested on real hardware yet. Expect to work through the
-> [checks](#check-the-install) on your first install.
+> halogen-bootc is in alpha. The NPU edition runs on the hardware below; anything else is
+> untested, so work through the [checks](#7-check-the-install) on your first install and
+> [report how it went](https://github.com/n4berius/halogen-bootc/issues/new?template=hardware-report.yml).
+
+## Tested hardware
+
+| Machine | Memory | Disk | Release | Edition |
+|---|---|---|---|---|
+| [AMD Ryzen AI Halo Developer Platform](https://www.microcenter.com/product/711961/amd-ryzen-ai-halo-developer-platform-linux-os) (Micro Center) | 128 GB | 2 TB NVMe | `v0.18.23-alpha.2` | With NPU |
+
+On that machine, these work:
+
+- USB install with Secure Boot on, and no MOK enrollment
+- Automatic storage, with each volume created
+- First-boot download of the Halogen container and about 125 GB of models
+- Halogen on the GPU, with all five NPU models loaded
+- The API from other machines on the network, such as Hermes
+
+Not yet confirmed on hardware: LUKS with TPM unlock (it passes in the VM test), the edition
+without NPU, and a long soak under real load.
+
+Its BIOS has no UMA frame buffer setting. That's fine: the GTT kernel settings give Halogen
+its memory either way.
 
 ## What you need
 
@@ -29,33 +50,46 @@ For how Halogen itself behaves, see its
 1. Update to your maker's newest BIOS. Halogen's
    [NPU docs](https://github.com/peonist-ai/halogen-flash-server/blob/main/docs/NPU.md#what-the-host-needs)
    explain why this matters.
-2. Set the UMA frame buffer, or dedicated graphics memory, to its explicit minimum, not Auto.
+2. If your BIOS offers a UMA frame buffer, or dedicated graphics memory, setting, set it to
+   its explicit minimum, not Auto. Some machines don't have this setting, and that's fine.
 3. Leave Secure Boot on if you want it. No MOK enrollment is needed.
 4. Use the BIOS power settings you want. Halogen's published numbers assume about 85 W.
 
 ## 3. Get the ISO
 
-Download your edition's ISO parts from this repository's Releases page. GitHub limits each
-file to 2 GiB, so the ISO is split. Join and check it:
+Download your edition's ISO and its `.sha256` file from this repository's
+[Releases page](https://github.com/n4berius/halogen-bootc/releases). Use the `-npu` files for
+the NPU edition and the `-no-npu` files for the other. Alpha, beta and RC releases are
+pre-releases, and [RELEASING.md](RELEASING.md) explains each channel.
+
+GitHub limits release files to 2 GiB, so the ISO comes in one of three forms. Check it in the
+folder you downloaded to; it must say `OK`:
+
+| You downloaded | Do this |
+|---|---|
+| One `.iso` | `sha256sum -c *.iso.sha256` |
+| One `.iso.xz` | `sha256sum -c *.iso.xz.sha256`, then unpack it with `xz -d` (7-Zip on Windows). balenaEtcher can write the `.xz` without unpacking |
+| Several `.iso.partNN` files | Older releases only. Join them with `cat *.iso.part* > halogen.iso`, then check with `sha256sum -c *.iso.sha256` |
+
+From `v0.18.23-alpha.3` on, each release ships one file whenever compression gets it under
+the limit.
+
+### Moving between releases later
+
+A machine installed from a pre-release stays on that exact build, so `bootc upgrade` finds
+nothing new. To move to a newer build, switch to its tag and reboot. For example, from
+alpha.1 to alpha.2:
 
 ```bash
-# Replace the tag with the release you downloaded
-cat halogen-flash-bootc-v0.18.23-alpha.1-npu.iso.part* > halogen-flash-bootc-v0.18.23-alpha.1-npu.iso
-sha256sum -c halogen-flash-bootc-v0.18.23-alpha.1-npu.iso.sha256
-```
-
-It must say `OK`. For the other edition, use the `-no-npu` files. Alpha, beta and RC
-releases are pre-releases, and [RELEASING.md](RELEASING.md) explains each channel.
-
-A machine installed from a pre-release stays on that exact build, so `bootc upgrade` brings
-it nothing. Once a stable release is out, move to it:
-
-```bash
-sudo bootc switch ghcr.io/n4berius/halogen-flash-bootc:0.18.23
+sudo bootc switch ghcr.io/n4berius/halogen-flash-bootc:0.18.23-alpha.2
 sudo systemctl reboot
 ```
 
-To build an ISO yourself, see [Build](README.md#build) in the README.
+Add `-no-npu` to the tag on that edition. Once a stable release is out, switch to the plain
+version tag, such as `:0.18.23`. From then on, `sudo bootc upgrade --apply` picks up Fedora
+updates for that Halogen version. `sudo bootc status` shows which tag a machine follows.
+
+To build an ISO yourself, see [BUILDING.md](BUILDING.md).
 
 ## 4. Write the USB drive
 
@@ -103,6 +137,9 @@ Log in and follow it:
 sudo halogenctl fetch-logs
 ```
 
+It prints how much has downloaded every minute. Press Ctrl+C to stop watching; the download
+carries on.
+
 Later boots skip the download unless the model list or Halogen version changes.
 
 ## 7. Check the install
@@ -111,7 +148,7 @@ Later boots skip the download unless the model list or Halogen version changes.
 sudo halogenctl doctor
 sudo halogenctl status
 sudo halogenctl config
-curl -H "Authorization: Bearer $(sudo halogenctl api-key)" http://localhost:8731/v1/models
+curl -H "Authorization: Bearer $(sudo halogenctl api-key)" http://127.0.0.1:8731/v1/models
 ```
 
 The API should list the Flash model, plus the NPU models on that edition. Clients connect to
@@ -145,14 +182,16 @@ sudo systemctl reboot
 ```
 
 Keep the passphrase as your recovery key. TPM unlock uses PCR 7, so changing Secure Boot
-settings means entering the passphrase and running `halogen-enroll-tpm` again. This step has
-not been tested yet, so if the next boot still asks for the passphrase, report it.
+settings means entering the passphrase and running `halogen-enroll-tpm` again. The CI install
+test enrolls the TPM and reboots without a passphrase, but this hasn't been confirmed on
+hardware yet. If the next boot still asks for the passphrase, report it.
 
 ## If something goes wrong
 
 | Symptom | Check |
 |---|---|
-| Machine reports far less than 128 GB | Set the UMA frame buffer to its minimum, not Auto |
+| Machine reports far less than 128 GB | Set the UMA frame buffer to its minimum, not Auto, if the BIOS offers it |
+| `curl localhost:8731` gets "connection reset" | Releases before alpha.3 only. Use `127.0.0.1` instead of `localhost` |
 | `/dev/accel/accel0` is missing | Use the NPU edition, and check the IOMMU and firmware |
 | Fabric clock is not held | `systemctl status halogen-fabric-clock` |
 | Halogen stays down after a config edit | `sudo halogenctl status`, then check the NPU model names |

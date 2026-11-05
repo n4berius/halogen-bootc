@@ -2,12 +2,16 @@
 # Admin wrapper for the rootless Halogen service. Run with sudo.
 set -euo pipefail
 unit() { systemctl --user --machine=halogen@.host "$@"; }
+# logs and fetch-logs keep following only on a terminal, so `| tail` and `> file` finish.
+# An optional second argument sets how many lines to show (default 100).
+follow=(); [ ! -t 1 ] || follow=(-f)
+lines="${2:-100}"
 
 case "${1:-status}" in
   status) unit --no-pager status halogen-fetch.service halogen.service || true ;;
   start|stop|restart) unit "$1" halogen.service ;;
-  logs) exec journalctl -f -n 100 _SYSTEMD_USER_UNIT=halogen.service + _SYSTEMD_USER_UNIT=halogen-fetch.service ;;
-  fetch-logs) exec journalctl -f -n 100 _SYSTEMD_USER_UNIT=halogen-fetch.service ;;
+  logs) exec journalctl --no-pager "${follow[@]}" -n "$lines" _SYSTEMD_USER_UNIT=halogen.service + _SYSTEMD_USER_UNIT=halogen-fetch.service ;;
+  fetch-logs) exec journalctl --no-pager "${follow[@]}" -n "$lines" _SYSTEMD_USER_UNIT=halogen-fetch.service ;;
   doctor)
     # Runs under the service manager, so it sees the service's real limits.
     systemd-run --machine=halogen@.host --user --pipe --wait --quiet /usr/libexec/halogen/render-config >/dev/null
@@ -20,5 +24,5 @@ case "${1:-status}" in
     grep -v '^#' /usr/share/halogen/locked.env
     ;;
   api-key) cat /srv/configs/api-key; echo ;;
-  *) echo "usage: halogenctl status|start|stop|restart|logs|fetch-logs|doctor|config|api-key" >&2; exit 2 ;;
+  *) echo "usage: halogenctl status|start|stop|restart|logs [lines]|fetch-logs [lines]|doctor|config|api-key" >&2; exit 2 ;;
 esac
