@@ -4,10 +4,15 @@ on:
     tags: ["v*"]
   workflow_dispatch:
     inputs:
-      tag:
-        description: Release tag, such as v0.18.23-alpha.1
+      release:
+        description: "alpha builds main; beta, rc and stable promote the newest release one step below. The number is worked out for you."
         required: true
-        type: string
+        type: choice
+        options: [alpha, beta, rc, stable]
+      from_main:
+        description: "beta, rc or stable only: build from main instead of promoting (for example a stable fix)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -24,25 +29,50 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - name: Check the commit is on main
-        run: git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+      - name: Pick the tag and the code to build
+        id: pick
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE: ${{ inputs.release }}
+          FROM_MAIN: ${{ inputs.from_main && '1' || '0' }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            # Promote only what was published: a tag whose release run failed has no release.
+            git tag -l 'v*' > "$RUNNER_TEMP/tags"
+            gh release list --limit 1000 --json tagName -q '.[].tagName' > "$RUNNER_TEMP/released"
+            out="$(scripts/next-tag.sh "$RELEASE" "$FROM_MAIN" "$RUNNER_TEMP/tags" "$RUNNER_TEMP/released")"
+            tag="$(sed -n 's/^tag=//p' <<< "$out")"; source="$(sed -n 's/^source=//p' <<< "$out")"
+            if [ "$source" = main ]; then ref="$GITHUB_SHA"; else ref="$(git rev-list -n 1 "$source")"; fi
+          else
+            tag="$GITHUB_REF_NAME"; source="tag pushed by hand"; ref="$GITHUB_SHA"
+          fi
+          echo "Release $tag from $source ($ref)"
+          echo "Channels it would move now: $(scripts/channels.sh "$tag")"
+          { echo "tag=$tag"; echo "ref=$ref"; } >> "$GITHUB_OUTPUT"
+      - name: Check the code is on main
+        env:
+          REF: ${{ steps.pick.outputs.ref }}
+        run: git merge-base --is-ancestor "$REF" origin/main
       - id: info
         env:
-          TAG: ${{ inputs.tag || github.ref_name }}
+          TAG: ${{ steps.pick.outputs.tag }}
+          REF: ${{ steps.pick.outputs.ref }}
         run: |
+          # Checked against the versions.env of the code being released, not of main.
+          git checkout -q "$REF"
           scripts/release-info.sh "$TAG" >> "$GITHUB_OUTPUT"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "Channels it would move now: $(scripts/channels.sh "$TAG")"
       - name: Create the tag
         if: github.event_name == 'workflow_dispatch'
         env:
-          TAG: ${{ steps.info.outputs.tag }}
+          TAG: ${{ steps.pick.outputs.tag }}
+          REF: ${{ steps.pick.outputs.ref }}
         run: |
           if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
-            echo "$TAG already exists. Use the next number." >&2
+            echo "$TAG already exists; run the release again to take the next number." >&2
             exit 1
           fi
-          git tag "$TAG"
+          git tag "$TAG" "$REF"
           git push origin "$TAG"
 
   image:
@@ -65,6 +95,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          ref: ${{ needs.info.outputs.tag }}
           fetch-depth: 0
       - run: tests/run.sh
       - run: scripts/build.sh
@@ -72,12 +103,16 @@ jobs:
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u "${{ github.actor }}" --password-stdin
           # Which channels to move is worked out now, with every tag pushed so far, so a release
-          # made during this build counts. None for an old release run again.
+          # made during this build counts. main's channel script is used, because a promoted
+          # release's code may predate it. None for an old release run again.
           git fetch -q --force --tags origin
-          channels="$(scripts/channels.sh "$TAG")"
+          git show origin/main:scripts/channels.sh > "$RUNNER_TEMP/channels.sh"
+          git tag -l 'v*' > "$RUNNER_TEMP/tags"
+          channels="$(bash "$RUNNER_TEMP/channels.sh" "$TAG" "$RUNNER_TEMP/tags")"
           echo "Moving the channels: ${channels:-none, a newer release exists}"
-          # shellcheck disable=SC2086 # one word per channel
-          scripts/push-image.sh $channels
+          # One channel per call, which the push script of older code also accepts.
+          if [ -z "$channels" ]; then podman push "$(scripts/image-ref.sh)"; fi
+          for channel in $channels; do scripts/push-image.sh "$channel"; done
 
   iso:
     needs: [info, image]
@@ -93,6 +128,8 @@ jobs:
       TAG: ${{ needs.info.outputs.tag }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.info.outputs.tag }}
       - name: Free disk space
         run: sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc
       - name: Install tools
@@ -127,6 +164,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.info.outputs.tag }}
       - uses: actions/download-artifact@v8
         with:
           path: assets

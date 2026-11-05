@@ -6,6 +6,7 @@ tests/static.sh
 tests/config.sh
 tests/release-info.sh
 tests/channels.sh
+tests/next-tag.sh
 tests/needs-build.sh
 tests/first-boot.sh
 tests/preflight.sh
