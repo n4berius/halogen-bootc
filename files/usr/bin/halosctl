@@ -144,7 +144,11 @@ case "$cmd" in
     ;;
   upgrade)
     [ -n "$(channel)" ] || echo "Note: this machine is pinned to one release, so an upgrade finds nothing newer. To follow new releases: sudo halosctl switch <channel>"
-    bootc upgrade --check
+    found="$(bootc upgrade --check 2>&1)"; printf '%s\n' "$found"
+    # bootc says "No changes in: <image>" when the registry has nothing newer. Then there is
+    # nothing to stage, so don't ask. Any other answer (an update, or wording we don't know)
+    # goes on to the question.
+    if grep -qi '^No changes in' <<< "$found"; then echo "Already up to date."; exit 0; fi
     [ "$check" = 0 ] || exit 0
     from="$(describe booted)"; before="$(field staged digest)"
     echo "Now:   $from"

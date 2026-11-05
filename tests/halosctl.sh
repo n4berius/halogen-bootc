@@ -12,7 +12,8 @@ f id 'echo "${FAKE_UID:-0}"'
 f bootc 'echo "bootc $*" >> "$FAKE/log"
 case "$1" in
   status) cat "$FAKE/status.json" ;;
-  upgrade) [ "${2:-}" = --check ] && { echo "Update available"; exit 0; }
+  upgrade) if [ "${2:-}" = --check ]; then
+             if [ -n "${FAKE_NO_UPDATE:-}" ]; then echo "No changes in: docker://x"; else echo "Update available"; fi; exit 0; fi
            [ ! -f "$FAKE/next.json" ] || cp "$FAKE/next.json" "$FAKE/status.json" ;;
   # Stages what the registry has under that name: FAKE_PUSHED_DIGEST when it moved meanwhile.
   switch) jq --arg r "$2" --arg d "${FAKE_PUSHED_DIGEST:-sha256:feed}" ".status.staged = {image: {image: {image: \$r},
@@ -74,7 +75,10 @@ done
 : > "$work/log"
 if "$ctl" upgrade --reboot < /dev/null > "$work/out" 2>&1; then echo "upgraded without confirming" >&2; exit 1; fi
 hasnt '^bootc upgrade$' "$work/log"; hasnt 'systemctl reboot' "$work/log"
-ok "help needs no root, bootc status is read once, extra words are refused, upgrade asks first"
+: > "$work/log"
+FAKE_NO_UPDATE=1 "$ctl" upgrade < /dev/null > "$work/out" 2>&1 || { echo "upgrade failed with nothing new" >&2; cat "$work/out" >&2; exit 1; }
+has 'Already up to date' "$work/out"; hasnt 'add --yes' "$work/out"; hasnt '^bootc upgrade$' "$work/log"
+ok "help needs no root, bootc status is read once, extra words are refused, upgrade asks first, and doesn't ask when nothing is new"
 ok "it needs root, a confirmation, a known channel and an image that exists, and shows registry errors"
 
 "$ctl" switch beta --yes > "$work/out"
