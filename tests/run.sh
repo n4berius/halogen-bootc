@@ -8,4 +8,5 @@ tests/release-info.sh
 tests/needs-build.sh
 tests/first-boot.sh
 tests/preflight.sh
+tests/halogen-update.sh
 echo "all checks passed"
