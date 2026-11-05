@@ -15,6 +15,10 @@ jobs:
       fail-fast: false
       matrix:
         variant: [npu, no-npu]
+    # Shared with release.yml's image job: one push moves an edition's channel tags at a time.
+    concurrency:
+      group: channel-tags-${{ matrix.variant }}
+      cancel-in-progress: false
     env:
       HALOGEN_VARIANT: ${{ matrix.variant }}
     steps:
@@ -26,13 +30,29 @@ jobs:
         run: |
           tag="$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+(-r[0-9]+)?$' | head -1 || true)"
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          # main's channel script, kept aside: the release checked out next may predate it.
+          cp scripts/channels.sh "$RUNNER_TEMP/channels.sh"
       - if: steps.stable.outputs.tag != ''
-        run: git checkout "${{ steps.stable.outputs.tag }}"
+        env:
+          TAG: ${{ steps.stable.outputs.tag }}
+        run: git checkout "$TAG"
       - name: Rebuild and push
         if: steps.stable.outputs.tag != ''
+        env:
+          TAG: ${{ steps.stable.outputs.tag }}
         run: |
-          eval "$(scripts/release-info.sh "${{ steps.stable.outputs.tag }}" | grep '^image_tag=')"
+          eval "$(scripts/release-info.sh "$TAG" | grep '^image_tag=')"
           export IMAGE_TAG="$image_tag"
+          export HALOS_RELEASE="${TAG#v}"
           scripts/build.sh
           echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u "${{ github.actor }}" --password-stdin
-          scripts/push-image.sh stable
+          # Worked out just before pushing, with every tag so far, so a release made during
+          # this build counts and no channel moves back.
+          git fetch -q --force --tags origin
+          git tag -l 'v*' > "$RUNNER_TEMP/tags"
+          channels="$("$RUNNER_TEMP/channels.sh" "$TAG" "$RUNNER_TEMP/tags")"
+          # The newest stable release always leads at least the stable channel.
+          [ -n "$channels" ] || { echo "no channels for $TAG; nothing was pushed" >&2; exit 1; }
+          echo "Moving the channels: $channels"
+          # One channel per call, which the push script of older releases also accepts.
+          for channel in $channels; do scripts/push-image.sh "$channel"; done

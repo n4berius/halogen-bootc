@@ -76,22 +76,25 @@ the limit.
 
 ### Moving between releases later
 
-A machine installed from a pre-release stays on that exact build, so `bootc upgrade` finds
-nothing new. To move to a newer build, switch to its tag and reboot. For example, to
-0.19.0-alpha.2:
+A machine installed from a release stays on that exact build, so an upgrade finds nothing
+new. To get new releases, pick a channel once and reboot:
 
 ```bash
-sudo bootc switch ghcr.io/n4berius/halos-flash:0.19.0-alpha.2
+sudo halosctl switch alpha
 sudo systemctl reboot
 ```
 
-Installs from before the rename to halOS (the 0.18.23 alphas) follow
-`ghcr.io/n4berius/halogen-flash-bootc`, which gets no new builds. The same `bootc switch` to a
-`halos-flash` tag moves them over. Their files, settings and models stay as they are.
+From then on, `sudo halosctl upgrade` stages the newest release on that channel. Channels are
+`alpha`, `beta`, `rc`, `release` (stable) and `edge`, and each one also gets newer releases of
+the more stable ones. `halosctl` keeps your edition, so it adds `-no-npu` for you.
+`sudo halosctl version` shows what the machine runs and follows, and `sudo halosctl rollback`
+goes back.
 
-Add `-no-npu` to the tag on that edition. Once a stable release is out, switch to the plain
-version tag, such as `:0.19.0`. From then on, `sudo bootc upgrade --apply` picks up Fedora
-updates for that Halogen version. `sudo bootc status` shows which tag a machine follows.
+Installs from before `halosctl` (`v0.19.0-alpha.1` and older) need one `bootc switch` first,
+with the channel tag, such as `ghcr.io/n4berius/halos-flash:alpha` (add `-no-npu` on that
+edition). This also moves installs from before the rename to halOS, which follow
+`ghcr.io/n4berius/halogen-flash-bootc` and get no new builds. Files, settings and models stay
+as they are.
 
 To build an ISO yourself, see [BUILDING.md](BUILDING.md).
 

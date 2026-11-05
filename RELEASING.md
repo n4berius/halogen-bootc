@@ -19,6 +19,16 @@ Add `-no-npu` to any image tag for the other edition, such as `0.18.23-beta.1-no
 `0.18.23` and the channel tags move. `0.18.23-alpha.1` and the like are never rebuilt. Each
 Monday, the newest stable release is rebuilt with Fedora updates.
 
+Each channel points to the newest release that is at least that stable. A stable release also
+moves `rc`, `beta` and `alpha`, an RC also moves `beta` and `alpha`, and a beta also moves
+`alpha`, unless that channel already has something newer. So a machine following `beta` gets an
+RC or stable release when it is newer than the newest beta. A channel never moves backwards:
+running an old release again moves none. `scripts/channels.sh` works this out from the git
+tags, for both the release and the Monday rebuild.
+
+Machines pick a channel with `sudo halosctl switch alpha|beta|rc|release|edge`, and
+`sudo halosctl upgrade` then fetches its newest release.
+
 ## Cut a release
 
 On GitHub, open **Actions > Release > Run workflow**. Keep the branch as `main`, enter the tag,

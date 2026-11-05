@@ -67,6 +67,9 @@ done
 grep -qi 'halos_' "$out/report.txt" || { echo "volume group name is not short" >&2; exit 1; }
 if [ -n "$luks" ]; then grep -q 'crypto_LUKS' "$out/report.txt"; fi
 grep -q 'halogen-fetch:' "$out/report.txt"
+# halosctl reads bootc's status and the image's release file on a real install.
+grep -qE "^halOS [0-9]+\.[0-9]+\.[0-9]+.*, $variant edition" "$out/report.txt" || { echo "halosctl version failed" >&2; exit 1; }
+grep -qE '^Image: +[a-z]' "$out/report.txt" || { echo "halosctl did not read bootc status" >&2; exit 1; }
 echo "installed system verified"
 
 # halogenctl selftest, as people run it on hardware. Only what a VM can pass is required.

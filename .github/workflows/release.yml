@@ -18,7 +18,6 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       tag: ${{ steps.info.outputs.tag }}
-      channel: ${{ steps.info.outputs.channel }}
       image_tag: ${{ steps.info.outputs.image_tag }}
       prerelease: ${{ steps.info.outputs.prerelease }}
     steps:
@@ -33,6 +32,7 @@ jobs:
         run: |
           scripts/release-info.sh "$TAG" >> "$GITHUB_OUTPUT"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Channels it would move now: $(scripts/channels.sh "$TAG")"
       - name: Create the tag
         if: github.event_name == 'workflow_dispatch'
         env:
@@ -48,6 +48,11 @@ jobs:
   image:
     needs: info
     runs-on: ubuntu-24.04
+    # One release or weekly rebuild moves an edition's channel tags at a time, so a slower
+    # build that finishes later can't move a channel back. Shared with refresh.yml.
+    concurrency:
+      group: channel-tags-${{ matrix.variant }}
+      cancel-in-progress: false
     strategy:
       fail-fast: false
       matrix:
@@ -55,15 +60,24 @@ jobs:
     env:
       HALOGEN_VARIANT: ${{ matrix.variant }}
       IMAGE_TAG: ${{ needs.info.outputs.image_tag }}
-      CHANNEL: ${{ needs.info.outputs.channel }}
+      TAG: ${{ needs.info.outputs.tag }}
+      HALOS_RELEASE: ${{ needs.info.outputs.tag }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
       - run: tests/run.sh
       - run: scripts/build.sh
       - name: Push
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u "${{ github.actor }}" --password-stdin
-          scripts/push-image.sh "$CHANNEL"
+          # Which channels to move is worked out now, with every tag pushed so far, so a release
+          # made during this build counts. None for an old release run again.
+          git fetch -q --force --tags origin
+          channels="$(scripts/channels.sh "$TAG")"
+          echo "Moving the channels: ${channels:-none, a newer release exists}"
+          # shellcheck disable=SC2086 # one word per channel
+          scripts/push-image.sh $channels
 
   iso:
     needs: [info, image]
