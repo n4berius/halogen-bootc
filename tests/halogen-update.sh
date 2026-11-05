@@ -20,6 +20,8 @@ cat > "$up/docs/FLAGS.md" <<'F'
 | `HALOGEN_AGENT_GUARD` | `off` | A preview: reads tool results on the NPU. |
 F
 printf '# Changelog\n\n## 9.1.0\n\nNew things.\n\n### Fixed\n\n- A fix. Thanks @someone (#12).\n\n## 9.0.0\n\nOld things.\n' > "$up/CHANGELOG.md"
+# A long history after the old version, as upstream's has: reading stops early, which must not fail.
+for i in $(seq 1 20000); do echo "- an old change, number $i, with enough text to fill the pipe"; done >> "$up/CHANGELOG.md"
 g -C "$up" init -q && g -C "$up" add -A && g -C "$up" commit -qm one && g -C "$up" tag v9.0.0
 echo notices2 > "$up/THIRD-PARTY-NOTICES.md"
 g -C "$up" commit -qam two && g -C "$up" tag v9.1.0 && g -C "$up" tag v9.2.0-rc.1
