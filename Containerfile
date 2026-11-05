@@ -77,10 +77,16 @@ RUN set -eu; \
     fi; \
     systemctl mask bootc-fetch-apply-updates.timer
 
-# The initramfs needs TPM2 support for LUKS unlock.
+# Rebuild the initramfs with LUKS, TPM2 and LVM support, and fail the build without them.
 RUN set -eu; \
     mkdir -p "$(realpath /root)"; \
     kver="$(ls /usr/lib/modules)"; \
-    env DRACUT_NO_XATTR=1 dracut -f "/usr/lib/modules/${kver}/initramfs.img" "$kver"
+    img="/usr/lib/modules/${kver}/initramfs.img"; \
+    env DRACUT_NO_XATTR=1 dracut --no-hostonly -f "$img" "$kver"; \
+    contents="$(lsinitrd "$img")"; \
+    echo "$contents" | grep -E 'cryptsetup|bin/lvm|tpm2' | awk '{print $NF}' | sort -u; \
+    for want in '/systemd-cryptsetup$' '/systemd-cryptsetup-generator$' 'libcryptsetup' 'bin/lvm$'; do \
+      echo "$contents" | awk '{print $NF}' | grep -qE "$want" || { echo "initramfs is missing $want" >&2; exit 1; }; \
+    done
 
 RUN bootc container lint

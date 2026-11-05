@@ -1,12 +1,20 @@
-"""Log in at a VM console through the QEMU monitor and capture a report on serial."""
+"""Log in at a VM console through the QEMU monitor and capture a report on serial.
+
+Usage: vm-login.py monitor.sock serial.log out-dir [plain|luks|luks-enroll|tpm]
+  luks         type the disk passphrase when asked
+  luks-enroll  as luks, then bind the disk to the TPM with halogen-enroll-tpm and power off
+  tpm          fail if the passphrase is asked for: the TPM must unlock the disk by itself
+"""
 import pathlib, re, socket, subprocess, sys, time
 
 sock_path, serial, out = sys.argv[1:4]
+mode = sys.argv[4] if len(sys.argv) > 4 and sys.argv[4] else "plain"
+luks = mode in ("luks", "luks-enroll")
 serial, out = pathlib.Path(serial), pathlib.Path(out)
 KEYS = {" ": "spc", "-": "minus", "=": "equal", ".": "dot", "/": "slash", ";": "semicolon",
         ",": "comma", "'": "apostrophe", "\n": "ret"}
 SHIFT = {"_": "minus", "|": "backslash", ">": "dot", "{": "bracket_left", "}": "bracket_right",
-         "&": "7", "*": "8", "(": "9", ")": "0"}
+         "&": "7", "*": "8", "(": "9", ")": "0", "$": "4", "?": "slash", '"': "apostrophe"}
 
 time.sleep(5)
 mon = socket.socket(socket.AF_UNIX)
@@ -31,6 +39,13 @@ while time.time() < deadline:
     cmd(f"screendump {shot} -f png")
     time.sleep(2)
     text = subprocess.run(["tesseract", shot, "-"], capture_output=True, text=True).stdout
+    if mode == "tpm" and "passphrase" in text.lower():
+        print(text)
+        sys.exit("the disk asked for its passphrase: the TPM did not unlock it")
+    if luks and "passphrase" in text.lower():
+        typed("halogentest\n")
+        luks = False
+        continue
     if "login:" in text:
         break
 else:
@@ -45,16 +60,31 @@ typed("timeout 180 sh -c 'until journalctl -o cat _SYSTEMD_USER_UNIT=halogen-fet
 time.sleep(5)
 typed("{ echo RESULT-START; cat /proc/cmdline; dmesg | grep -i secure; bootctl status | grep -i secure; "
       "bootc status | head -12; udevadm verify /usr/lib/udev/rules.d/70-halogen-devices.rules; "
-      "sestatus | head -3; id halogen; loginctl show-user halogen -p Linger; "
+      "lsblk -f | grep -i crypto; "
+      "for d in $(lsblk -rno PATH,FSTYPE | awk '$2==\"crypto_LUKS\"{print $1}'); do cryptsetup luksDump $d | grep -i systemd-tpm2; done; vgs --noheadings -o vg_name; findmnt -rn -o TARGET,SOURCE -t xfs; sestatus | head -3; id halogen; loginctl show-user halogen -p Linger; "
       "systemctl status user@970.service --no-pager | head -4; journalctl --no-pager -n 8 -o cat _SYSTEMD_USER_UNIT=halogen-fetch.service; systemctl --failed --no-legend --no-pager; "
       "systemctl is-active firewalld halogen-prepare; echo RESULT-END; } > /dev/ttyS0 2>&1\n")
 
-deadline = time.time() + 300
-while time.time() < deadline:
-    time.sleep(5)
-    log = serial.read_text(errors="replace")
-    if "RESULT-END" in log.split("RESULT-START")[-1] and "RESULT-START" in log:
-        report = log.split("RESULT-START")[-1].split("RESULT-END")[0]
-        (out / "report.txt").write_text(re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", report))
-        sys.exit(0)
-sys.exit("the report never reached the serial log")
+def wait_serial(marker, seconds):
+    deadline = time.time() + seconds
+    while time.time() < deadline:
+        time.sleep(5)
+        log = serial.read_text(errors="replace")
+        if marker in log:
+            return log
+    sys.exit(f"{marker} never reached the serial log")
+
+log = wait_serial("RESULT-END", 300)
+report = log.split("RESULT-START")[-1].split("RESULT-END")[0]
+(out / "report.txt").write_text(re.sub(r"\x1b\[[0-9;]*[A-Za-z]", "", report))
+
+if mode == "luks-enroll":
+    # Exactly what INSTALL.md tells people to run; PASSWORD answers the passphrase prompt.
+    typed("PASSWORD=halogentest halogen-enroll-tpm > /dev/ttyS0 2>&1; echo ENROLL-RC=$? > /dev/ttyS0\n")
+    log = wait_serial("ENROLL-RC=", 120)
+    tail = log.split("RESULT-END")[-1]
+    print(tail)
+    if "ENROLL-RC=0" not in tail:
+        sys.exit("halogen-enroll-tpm failed")
+    typed("systemctl poweroff\n")
+sys.exit(0)

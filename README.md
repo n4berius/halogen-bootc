@@ -76,7 +76,7 @@ download the models.
 | OS image | Kernel arguments, XRT, services, firewall, Halogen digest | Rebuild and `bootc upgrade` |
 | `/srv/configs` | `halogen.env` with every allowed option, `api-key` | Edit on the machine |
 | `/usr/share/halogen` | Locked settings and the allowed-option list | Rebuild only, read-only |
-| `/srv/models` | Flash weights and NPU models, about 125 GB | Fetched on first boot |
+| `/srv/models` | Flash weights and NPU models, about 125 GB, on their own volume | Fetched on first boot |
 | BIOS | UMA frame buffer at its explicit minimum, not Auto; newest firmware | Set by hand |
 
 ## Editions
