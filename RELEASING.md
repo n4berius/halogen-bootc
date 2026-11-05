@@ -31,21 +31,38 @@ Machines pick a channel with `sudo halosctl switch alpha|beta|rc|release|edge`, 
 
 ## Cut a release
 
-On GitHub, open **Actions > Release > Run workflow**. Keep the branch as `main`, enter the tag,
-such as `v0.18.23-alpha.1`, and choose **Run workflow**. Do not use **Draft a new release**,
-because the workflow creates the release itself.
+On GitHub, open **Actions > Release > Run workflow**, keep the branch as `main`, pick what to
+release and choose **Run workflow**. You never type a tag: the workflow takes the next number.
 
-You can also push a tag from your own computer:
+| Pick | What it does | Example |
+|---|---|---|
+| `alpha` | Builds `main` as the next alpha | `v0.19.0-alpha.3` after alpha.2 |
+| `beta` | Promotes the newest published alpha: the same code, built again | alpha.3 becomes `v0.19.0-beta.1` |
+| `rc` | Promotes the newest published beta | `v0.19.0-rc.1` |
+| `stable` | Promotes the newest published RC. A second stable of the same version becomes `-r2` | `v0.19.0`, then `v0.19.0-r2` |
+
+Tick **from main** to build a beta, RC or stable from `main` instead of promoting, for example
+for a stable fix. Only published releases are promoted, so a tag whose run failed is skipped,
+but its number is never used again. A promotion builds the same code again, so Fedora packages
+can be newer than in the release it came from. Do not use **Draft a new release**, because the
+workflow creates the release itself.
+
+You can still push a tag by hand from your own computer:
 
 ```bash
 git checkout main && git pull
-git tag v0.18.23-alpha.1
-git push origin v0.18.23-alpha.1
+git tag v0.19.0-alpha.3
+git push origin v0.19.0-alpha.3
 ```
 
 Either way, the workflow runs checks, builds both images, runs a full VM install of each ISO, and
 then creates the GitHub release. Nothing is published as a release unless both installs pass, but the images are
-pushed before the ISO tests run. If a run fails, fix it on `main` and cut the next number.
+pushed before the ISO tests run. If a run fails, fix it on `main` and run it again: it takes the
+next number. A promotion builds its old code again, so a fix on `main` doesn't reach it: cut a
+new alpha and promote that, or tick **from main**.
+
+A promotion takes the newest *published* release one step down. Check on the Releases page that
+it is the one you mean before promoting, for example that the alpha you tested is there.
 
 ## Move to a new Halogen version
 

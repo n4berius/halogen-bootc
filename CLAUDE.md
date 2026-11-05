@@ -23,8 +23,9 @@ name, but allows saying halOS runs Halogen.
   or move release tags.
 - Never commit secrets. The API key and the HF token live only on the machine, under
   `/srv/configs`.
-- Releases are cut by the owner (Actions > Release > Run workflow, with a tag such as
-  `v0.19.0-alpha.1`). Don't create tags or releases yourself.
+- Releases are cut by the owner (Actions > Release > Run workflow, picking alpha, beta, rc or
+  stable; `scripts/next-tag.sh` numbers it, and beta/rc/stable promote the newest published
+  release one step below). Don't create tags or releases yourself.
 - If GitHub or a registry refuses an action (403 from the session proxy), stop and tell the
   owner. Don't work around it.
 - Run `tests/run.sh` before every push. CI also runs shellcheck, which may not be installed
@@ -39,7 +40,7 @@ name, but allows saying halOS runs Halogen.
 | `Containerfile.installer`, `installer/` | The live installer image, Anaconda defaults (storage layout), branding and boot menu |
 | `files/` | Copied into both editions: systemd units, `halosctl`, `halogenctl`, `halogen-enroll-tpm`, `/usr/libexec/halogen/*` |
 | `variants/npu`, `variants/no-npu` | Per-edition kernel arguments, Quadlet drop-ins, the allowed-options list and default `halogen.env` |
-| `scripts/` | `build.sh`, `build-iso.sh`, `package-iso.sh` (single-file release ISO), `release-info.sh`, `gen-options.py` (options from upstream `FLAGS.md`), `halogen-update.sh` (pins a new Halogen release), `size-report.sh`, `channels.sh` (which channel tags a release moves), `push-image.sh` |
+| `scripts/` | `build.sh`, `build-iso.sh`, `package-iso.sh` (single-file release ISO), `release-info.sh`, `gen-options.py` (options from upstream `FLAGS.md`), `halogen-update.sh` (pins a new Halogen release), `size-report.sh`, `channels.sh` (which channel tags a release moves), `next-tag.sh` (the next release tag), `push-image.sh` |
 | `tests/` | `run.sh` (fast checks, no GPU or network), `iso-install.sh` + `vm-login.py` (QEMU install test) |
 | `.claude/agents/` | Subagents: `code-reviewer` (QA review before merge) and `security-auditor` (audit, zero-cost hardening ideas). Both only read and report |
 | `.github/workflows/` | `build.yml` (image, edge tag), `iso.yml` (ISO + VM install test), `release.yml`, `refresh.yml` (weekly rebuild of stable), `halogen-update.yml` (daily: opens a PR for a new Halogen release) |
