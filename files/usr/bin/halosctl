@@ -2,6 +2,8 @@
 # halOS admin tool for the OS: which release you run, updates, release channels and rollback.
 # halogenctl handles the Halogen server and its models. Run with sudo.
 set -euo pipefail
+# The image's own release file is the only source of these; never take them from outside.
+unset HALOS_RELEASE HALOGEN_VERSION HALOGEN_VARIANT HALOGEN_IMAGE
 # shellcheck source=/dev/null
 . "${HALOGEN_RELEASE_FILE:-/usr/share/halogen/release.env}"
 history="${HALOS_HISTORY:-/var/lib/halos/history}"

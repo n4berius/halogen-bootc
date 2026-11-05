@@ -30,6 +30,8 @@ host "$(dep ghcr.io/n4berius/halos-flash:0.19.0-alpha.1 0.19.0 sha256:aaa)" null
   "$(dep ghcr.io/n4berius/halogen-flash-bootc:0.18.23-alpha.2 0.18.23 sha256:old)" > "$work/status.json"
 printf 'HALOGEN_IMAGE=img@sha256:1\nHALOGEN_VERSION=0.19.0\nHALOGEN_VARIANT=npu\n' > "$work/release.env"
 export PATH="$work/bin:$PATH" HALOGEN_RELEASE_FILE="$work/release.env" HALOS_HISTORY="$work/history" SUDO_USER=owner
+# The release workflow sets HALOS_RELEASE for its build; halosctl must read only the image's file.
+export HALOS_RELEASE=v9.9.9-from-outside HALOGEN_VARIANT=from-outside
 ctl="$repo/files/usr/bin/halosctl"
 ok() { echo "ok: $*"; }
 has() { grep -qE -- "$1" "$2" || { echo "expected '$1' in $2:" >&2; cat "$2" >&2; exit 1; }; }
