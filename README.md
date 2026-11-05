@@ -159,6 +159,7 @@ sudo halogenctl doctor       # BIOS, kernel, NPU, clock and memlock checks
 sudo halogenctl restart      # after editing /srv/configs/halogen.env
 sudo halogenctl config       # show the settings in effect
 sudo halogenctl api-key      # print the API key
+sudo halogenctl hf-token     # save a Hugging Face token for faster model downloads
 ```
 
 `logs` and `fetch-logs` follow new lines in a terminal until you press Ctrl+C. Piped into

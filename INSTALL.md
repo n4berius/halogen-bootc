@@ -140,6 +140,18 @@ sudo halogenctl fetch-logs
 It prints how much has downloaded every minute. Press Ctrl+C to stop watching; the download
 carries on.
 
+Downloads work without an account. A free Hugging Face read token raises the rate limits and
+usually speeds them up. Create one at
+[huggingface.co/settings/tokens](https://huggingface.co/settings/tokens), then:
+
+```bash
+sudo halogenctl hf-token     # paste the token; it isn't shown or printed
+sudo halogenctl restart      # the download resumes with the token
+```
+
+The token is stored in `/srv/configs/hf-token`, readable only by the `halogen` service, and
+used only for downloads. Remove it with `sudo halogenctl hf-token --remove`.
+
 Later boots skip the download unless the model list or Halogen version changes.
 
 ## 7. Check the install

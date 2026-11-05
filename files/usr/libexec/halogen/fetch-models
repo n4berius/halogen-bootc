@@ -10,6 +10,7 @@ helper="${HALOGEN_FETCH_HELPER:-/usr/libexec/halogen/fetch-in-container}"
 needed_gib="${HALOGEN_MODELS_NEEDED_GIB:-125}"
 max_wait="${HALOGEN_RETRY_MAX_S:-300}"
 progress_s="${HALOGEN_PROGRESS_S:-60}"
+hf_token="${HALOGEN_HF_TOKEN_FILE:-/srv/configs/hf-token}"
 
 # shellcheck disable=SC1090
 . "$release"
@@ -53,13 +54,23 @@ if [ "$progress_s" -gt 0 ]; then
   trap 'kill "$reporter" 2>/dev/null' EXIT
 fi
 
+# An optional Hugging Face token (halogenctl hf-token) gives faster, less limited downloads.
+# It reaches the downloader as a read-only file, so it never shows in process lists.
+token_args=()
+if [ -s "$hf_token" ]; then
+  token_args=(-v "$hf_token:/run/secrets/hf-token:ro" -e HF_TOKEN_PATH=/run/secrets/hf-token)
+  echo "halogen-fetch: using your Hugging Face token"
+else
+  echo "halogen-fetch: no Hugging Face token; downloads are anonymous. Add one with: sudo halogenctl hf-token"
+fi
+
 wait_s=15
 while :; do
   podman run --rm --pull=never --read-only --tmpfs /tmp \
     --cap-drop=all --security-opt no-new-privileges --entrypoint bash \
     -e HF_HOME=/tmp/hf -e HF_HUB_OFFLINE=0 -e HF_HUB_DISABLE_TELEMETRY=1 -e HF_HUB_DISABLE_PROGRESS_BARS=1 \
     -e "WEIGHTS_REPO=$HALOGEN_WEIGHTS_REPO" -e "WEIGHTS_REVISION=$HALOGEN_WEIGHTS_REVISION" \
-    -e "NPU_MODELS=$npu_models" -e "VISION=$vision" \
+    -e "NPU_MODELS=$npu_models" -e "VISION=$vision" "${token_args[@]}" \
     -v "$models:/models" -v "$npu_dir:/models/npu" -v "$helper:/fetch.sh:ro" \
     "$HALOGEN_IMAGE" /fetch.sh
   rc=$?

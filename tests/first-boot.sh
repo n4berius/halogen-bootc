@@ -12,6 +12,8 @@ printf 'model embed repo=org/embed revision=abc\nmodel rerank repo=org/rerank re
 cat > "$work/bin/hf" <<'S'
 #!/bin/bash
 echo "hf $*" >> "$FAKE/hf.log"
+echo "Hint: A new version of huggingface_hub (9.9) is available!" >&2
+echo "Warning: You are sending unauthenticated requests to the HF Hub." >&2
 [ ! -e "$FAKE/fail-hf" ] || { rm "$FAKE/fail-hf"; exit 1; }
 shift; repo="$1"; shift; dest=""; files=()
 while [ $# -gt 0 ]; do case "$1" in
@@ -47,7 +49,7 @@ echo 'HALOGEN_NPU_MODELS=embed,rerank' > "$work/config.env"
 echo HALOGEN_NPU_MODELS > "$work/allowed"
 export XDG_RUNTIME_DIR="$work/run" HALOGEN_ALLOWED_FILE="$work/allowed" HALOGEN_RENDER="$repo/files/usr/libexec/halogen/render-config"
 export HALOGEN_RELEASE_FILE="$work/release.env" HALOGEN_CONFIG_FILE="$work/config.env" HALOGEN_MODELS_DIR="$work/models" \
-  HALOGEN_FETCH_HELPER="$HELPER_SRC" HALOGEN_MODELS_NEEDED_GIB=0 HALOGEN_RETRY_MAX_S=0 HALOGEN_PROGRESS_S=0
+  HALOGEN_FETCH_HELPER="$HELPER_SRC" HALOGEN_MODELS_NEEDED_GIB=0 HALOGEN_RETRY_MAX_S=0 HALOGEN_PROGRESS_S=0 HALOGEN_HF_TOKEN_FILE="$work/hf-token"
 sleep() { :; }; export -f sleep
 fetch="$repo/files/usr/libexec/halogen/fetch-models"
 sed 's/^wait_s=15$/wait_s=0/' "$fetch" > "$work/fetch"; chmod +x "$work/fetch"
@@ -58,6 +60,9 @@ touch "$work/fail-pull" "$work/fail-hf"
 [ -f "$work/models/qwen38-flash-next-v2.hgn" ] && [ -f "$work/models/tokenizer/tokenizer.json" ]
 [ -f "$work/models/.fetch-stamp" ]
 ok "first boot retries, then fetches everything and writes the stamp"
+if grep -q 'Hint: \|unauthenticated requests' "$work/out"; then echo "hf noise reached the log" >&2; exit 1; fi
+grep -q 'no Hugging Face token' "$work/out"
+ok "hf's upgrade hints are filtered, and a missing token is explained once"
 [ -f "$work/models/embed/devices/d.hnpm" ] || [ -f "$work/models/npu/embed/devices/d.hnpm" ]
 ok "shared device files of a dependent NPU model are fetched"
 
@@ -69,6 +74,13 @@ echo 'HALOGEN_NPU_MODELS=embed' > "$work/config.env"
 "$work/fetch" >/dev/null
 grep -q ' run ' "$work/podman.log"
 ok "changing the model list triggers a fetch"
+
+echo 'hf_secret123' > "$work/hf-token"; rm "$work/models/.fetch-stamp"; : > "$work/podman.log"
+"$work/fetch" > "$work/out" 2>&1
+grep -q "$work/hf-token:/run/secrets/hf-token:ro" "$work/podman.log" && grep -q 'HF_TOKEN_PATH=/run/secrets/hf-token' "$work/podman.log"
+if grep -q hf_secret123 "$work/podman.log" "$work/out"; then echo "the token leaked into a command line or log" >&2; exit 1; fi
+rm "$work/hf-token"
+ok "a Hugging Face token is passed as a read-only file, never as a value"
 
 rm "$work/models/.fetch-stamp"; touch "$work/fail-verify"
 if "$work/fetch" >/dev/null 2>&1; then echo "verify failure was ignored" >&2; exit 1; fi

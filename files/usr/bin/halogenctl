@@ -27,5 +27,18 @@ case "${1:-status}" in
     grep -v '^#' /usr/share/halogen/locked.env
     ;;
   api-key) cat /srv/configs/api-key; echo ;;
-  *) echo "usage: halogenctl status|start|stop|restart|logs [lines]|fetch-logs [lines]|doctor|config|api-key" >&2; exit 2 ;;
+  hf-token)
+    # Store a Hugging Face read token for model downloads. It is never printed.
+    token=/srv/configs/hf-token
+    if [ "${2:-}" = --remove ]; then rm -f "$token"; echo "Removed the Hugging Face token."; exit 0; fi
+    read -rsp "Hugging Face read token (from huggingface.co/settings/tokens): " value; echo
+    case "$value" in
+      hf_?*) ;;
+      *) echo "That doesn't look like a token; they start with hf_. Nothing saved." >&2; exit 1 ;;
+    esac
+    (umask 077; printf '%s\n' "$value" > "$token.new")
+    chown halogen:halogen "$token.new" && mv "$token.new" "$token"
+    echo "Saved. The next download uses it: sudo halogenctl restart"
+    ;;
+  *) echo "usage: halogenctl status|start|stop|restart|logs [lines]|fetch-logs [lines]|doctor|config|api-key|hf-token [--remove]" >&2; exit 2 ;;
 esac
