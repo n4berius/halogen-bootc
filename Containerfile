@@ -21,7 +21,7 @@ RUN set -eu; \
     echo "$version" > /out/VERSION; \
     (cd /debs && sha256sum ./*.deb) > /out/debs.sha256
 
-FROM ${FEDORA_BOOTC_IMAGE}
+FROM ${FEDORA_BOOTC_IMAGE} AS os
 ARG HALOGEN_VARIANT
 ARG HALOGEN_IMAGE
 ARG HALOGEN_VERSION
@@ -32,9 +32,22 @@ ARG HALOGEN_NOTICES_SHA256
 ARG HALOGEN_WEIGHTS_REPO
 ARG HALOGEN_WEIGHTS_REVISION
 
+# A headless AMD server: AMD GPU, NPU and CPU firmware, the network firmware Strix Halo boards
+# use (Realtek, MediaTek, Qualcomm), and a few admin tools. fwupd stays for firmware updates.
 RUN dnf -y --setopt=install_weak_deps=False install \
-      amd-gpu-firmware firewalld linux-firmware tpm2-tss && \
+      amd-gpu-firmware firewalld linux-firmware tpm2-tss \
+      amdsmi nvtop htop pciutils usbutils tmux && \
+    dnf -y remove \
+      nvidia-gpu-firmware intel-gpu-firmware intel-npu-firmware intel-audio-firmware \
+      cirrus-audio-firmware brcmfmac-firmware tiwilink-firmware nxpwireless-firmware \
+      qcom-wwan-firmware microcode_ctl \
+      'qemu-user-static*' toolbox sos python3-boto3 python3-botocore python3-s3transfer \
+      'sssd*' adcli libsmbclient 'samba-*' nfs-utils udisks2 libudisks2 \
+      btrfs-progs nilfs-utils f2fs-tools ntfsprogs ntfs-3g exfatprogs udftools \
+      fwupd-plugin-modem-manager ModemManager-glib libqmi libmbim && \
     dnf clean all && \
+    rm -rf /var/log/dnf5.log /var/lib/dnf /var/cache/libdnf5 /run/dnf && \
+    rpm -q fwupd amd-ucode-firmware realtek-firmware mt7xxx-firmware atheros-firmware && \
     ls -d /usr/lib/firmware/amdgpu /usr/lib/firmware/amdnpu
 
 COPY files/ /
@@ -75,7 +88,8 @@ RUN set -eu; \
     else \
       rm -rf /usr/lib/halogen/xrt /usr/share/licenses/halogen-xrt /usr/lib/systemd/system/halogen-fabric-clock.service /usr/libexec/halogen/halogen-fabric-clock; \
     fi; \
-    systemctl mask bootc-fetch-apply-updates.timer
+    systemctl mask bootc-fetch-apply-updates.timer; \
+    systemctl disable systemd-homed.service systemd-homed-activate.service
 
 # Rebuild the initramfs with LUKS, TPM2 and LVM support, and fail the build without them.
 RUN set -eu; \
@@ -89,4 +103,15 @@ RUN set -eu; \
       echo "$contents" | awk '{print $NF}' | grep -qE "$want" || { echo "initramfs is missing $want" >&2; exit 1; }; \
     done
 
+# The base image's own OSTree copy of its files, which still holds everything removed above.
+# A flattened image does not use it; Fedora's rechunker drops it the same way.
+RUN rm -rf /sysroot/ostree && bootc container lint
+
+# One layer, so the files removed above are not shipped in the base image's layers
+# underneath. This keeps the installer ISO small. Labels and start-up as in the base image.
+FROM scratch
+COPY --from=os / /
+LABEL containers.bootc=1 ostree.bootable=true
+STOPSIGNAL SIGRTMIN+3
+CMD ["/sbin/init"]
 RUN bootc container lint
