@@ -12,7 +12,9 @@ f id 'echo "${FAKE_UID:-0}"'
 f bootc 'echo "bootc $*" >> "$FAKE/log"
 case "$1" in
   status) cat "$FAKE/status.json" ;;
-  upgrade) [ "${2:-}" = --check ] && { echo "Update available"; exit 0; }
+  upgrade) if [ "${2:-}" = --check ]; then
+             [ -z "${FAKE_CHECK_FAILS:-}" ] || { echo "error: 403 Forbidden"; exit 1; }
+             if [ -n "${FAKE_NO_UPDATE:-}" ]; then echo "No changes in: docker://x"; else echo "Update available"; fi; exit 0; fi
            [ ! -f "$FAKE/next.json" ] || cp "$FAKE/next.json" "$FAKE/status.json" ;;
   # Stages what the registry has under that name: FAKE_PUSHED_DIGEST when it moved meanwhile.
   switch) jq --arg r "$2" --arg d "${FAKE_PUSHED_DIGEST:-sha256:feed}" ".status.staged = {image: {image: {image: \$r},
@@ -74,7 +76,18 @@ done
 : > "$work/log"
 if "$ctl" upgrade --reboot < /dev/null > "$work/out" 2>&1; then echo "upgraded without confirming" >&2; exit 1; fi
 hasnt '^bootc upgrade$' "$work/log"; hasnt 'systemctl reboot' "$work/log"
-ok "help needs no root, bootc status is read once, extra words are refused, upgrade asks first"
+: > "$work/log"
+FAKE_NO_UPDATE=1 "$ctl" upgrade < /dev/null > "$work/out" 2>&1 || { echo "upgrade failed with nothing new" >&2; cat "$work/out" >&2; exit 1; }
+has 'Already up to date' "$work/out"; hasnt 'add --yes' "$work/out"; hasnt '^bootc upgrade$' "$work/log"
+if FAKE_CHECK_FAILS=1 "$ctl" upgrade --yes > "$work/out" 2>&1; then echo "a failed check passed" >&2; exit 1; fi
+has '403 Forbidden' "$work/out"; has 'could not check' "$work/out"
+cp "$work/status.json" "$work/keep2.json"
+host "$(dep ghcr.io/n4berius/halos-flash:alpha 0.19.0-alpha.3 sha256:aaa)" \
+  "$(dep ghcr.io/n4berius/halos-flash:alpha 0.19.0-alpha.4 sha256:new4)" > "$work/status.json"
+FAKE_NO_UPDATE=1 "$ctl" upgrade < /dev/null > "$work/out" 2>&1
+has 'already staged: .*0.19.0-alpha.4.*reboot' "$work/out"; hasnt 'Already up to date' "$work/out"
+cp "$work/keep2.json" "$work/status.json"
+ok "help needs no root, bootc status is read once, extra words are refused, upgrade asks first, doesn't ask when nothing is new, names a staged update, and shows a failed check"
 ok "it needs root, a confirmation, a known channel and an image that exists, and shows registry errors"
 
 "$ctl" switch beta --yes > "$work/out"

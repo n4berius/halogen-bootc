@@ -96,6 +96,10 @@ edition). This also moves installs from before the rename to halOS, which follow
 `ghcr.io/n4berius/halogen-flash-bootc` and get no new builds. Files, settings and models stay
 as they are.
 
+Using `bootc` directly: `bootc switch` to the name the machine already follows does nothing
+("Image specification is unchanged"), even when that tag now points to a newer build. Use
+`sudo bootc upgrade` (or `sudo halosctl upgrade`) to get the newest build of the current name.
+
 To build an ISO yourself, see [BUILDING.md](BUILDING.md).
 
 ## 4. Write the USB drive
