@@ -24,7 +24,7 @@ name, but allows saying halOS runs Halogen.
 - Never commit secrets. The API key and the HF token live only on the machine, under
   `/srv/configs`.
 - Releases are cut by the owner (Actions > Release > Run workflow, with a tag such as
-  `v0.18.23-alpha.3`). Don't create tags or releases yourself.
+  `v0.19.0-alpha.1`). Don't create tags or releases yourself.
 - If GitHub or a registry refuses an action (403 from the session proxy), stop and tell the
   owner. Don't work around it.
 - Run `tests/run.sh` before every push. CI also runs shellcheck, which may not be installed
@@ -70,7 +70,7 @@ name, but allows saying halOS runs Halogen.
 - `/srv` is `/var/srv` on bootc. The installer makes LVM volumes for `/`, `/var`, `/var/log`,
   `/var/log/audit`, `/var/home`, `/var/srv/configs` and `/var/srv/models`.
 - Updates are manual (`bootc switch` / `upgrade`), since a reboot stops inference. Pre-release
-  tags never move. The version tag (`0.18.23`) moves with stable releases and weekly rebuilds.
+  tags never move. The version tag (`0.19.0`) moves with stable releases and weekly rebuilds.
 
 ## Lessons already learned
 
@@ -105,16 +105,16 @@ name, but allows saying halOS runs Halogen.
 ## Where the work stands
 
 Open issues and the **beta** milestone are the source of truth, prioritised with the
-`priority: high/medium/low` labels. When this file was written:
+`priority: high/medium/low` labels. When this file was last updated (after the halOS rename):
 
-- PR #22 (draft) adds `scripts/size-report.sh` to the ISO workflow. Its artifacts
-  (`size-report-npu` / `size-report-no-npu`) drive trimming for #26.
-- #23: the weights are pinned to a commit (`HALOGEN_WEIGHTS_REVISION`). Freyja can confirm
-  its copy matches with
-  `sudo head -n1 /srv/models/.cache/huggingface/download/qwen38-flash-next-v2.hgn.metadata`.
-- #24: build the Halogen update workflow, then let it open the 0.19.0 update PR. The
-  changelog notes are on the issue.
-- #25 is the hardware checklist for beta.
+- Merged: smaller ISO (#22, about 1368 MiB plain `.iso`), the Halogen update workflow (#24)
+  and the 0.19.0 update, one NPU folder and own checkpoints (#18, #19), weights pinned (#23),
+  `halogenctl selftest`, and the rename to halOS.
+- Next: the owner cuts `v0.19.0-alpha.1`, the first release as `halos-flash`. Then freyja
+  moves over with `bootc switch`, runs `sudo halogenctl selftest`, the soak test and
+  `bootc upgrade`/rollback, which closes the hardware checklist (#25) for beta.
+- Without hardware: a `security-auditor` pass, more VM checks (removed packages, open ports),
+  a test for the `halogenctl model` wrapper, and clearer fetch messages for a wrong `:fast`.
 
 The owner's test machine is "freyja": an AMD Ryzen AI Halo Developer Platform (128 GB,
 2 TB NVMe), NPU edition, Secure Boot on.

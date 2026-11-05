@@ -40,6 +40,11 @@ set_pin HALOGEN_SOURCE_COMMIT "$commit"
 set_pin HALOGEN_CLOCK_SHA256 "$clock"
 set_pin HALOGEN_LICENSE_SHA256 "$license"
 set_pin HALOGEN_NOTICES_SHA256 "$notices"
+# Our notices name the Halogen version and commit we ship, as Peonist's trademark policy asks.
+if [ -f THIRD-PARTY-NOTICES.md ]; then
+  sed -i -E "s/^(\| \[halogen-flash-server\][^|]*\| )[0-9.]+, commit \`[0-9a-f]+\`/\1$want, commit \`${commit:0:7}\`/" THIRD-PARTY-NOTICES.md
+  grep -qF "| $want, commit \`${commit:0:7}\`" THIRD-PARTY-NOTICES.md || { echo "could not update THIRD-PARTY-NOTICES.md" >&2; exit 1; }
+fi
 
 work="$(mktemp -d)"; trap 'rm -rf "$work"' EXIT
 for e in npu no-npu; do cp "variants/$e/usr/share/halogen/options.allowed" "$work/$e.old"; done

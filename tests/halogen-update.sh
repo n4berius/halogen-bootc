@@ -28,7 +28,7 @@ g -C "$up" commit -qam two && g -C "$up" tag v9.1.0 && g -C "$up" tag v9.2.0-rc.
 
 here="$work/here"
 mkdir -p "$here"
-cp -r "$repo/scripts" "$repo/variants" "$repo/versions.env" "$here/"
+cp -r "$repo/scripts" "$repo/variants" "$repo/versions.env" "$repo/THIRD-PARTY-NOTICES.md" "$here/"
 # Its own starting option lists, so the result does not depend on this checkout's (the update
 # workflow runs this test after it has already regenerated them).
 for e in npu no-npu; do echo HALOGEN_TEMPERATURE > "$here/variants/$e/usr/share/halogen/options.allowed"; done
@@ -45,6 +45,8 @@ HALOGEN_UPDATE_DIGEST="$digest" "$here/scripts/halogen-update.sh" "$up" "$work/b
 [ "$HALOGEN_NOTICES_SHA256" = "$(echo notices2 | sha256sum | cut -d' ' -f1)" ]
 [ "$HALOGEN_CLOCK_SHA256" = "$(echo clock | sha256sum | cut -d' ' -f1)" ]
 [ "$HALOGEN_WEIGHTS_REVISION" = "$(sed -n 's/^HALOGEN_WEIGHTS_REVISION=//p' "$repo/versions.env")" ]
+grep -qF "| 9.1.0, commit \`$(g -C "$up" rev-parse --short=7 v9.1.0)\`" "$here/THIRD-PARTY-NOTICES.md" \
+  || { echo "the notices still name the old Halogen version" >&2; exit 1; }
 echo "ok: the newest release's pins and hashes are written, and the weights stay pinned"
 
 [ "$(cat "$here/variants/npu/usr/share/halogen/options.allowed")" = "$(printf 'HALOGEN_AGENT_GUARD\nHALOGEN_TEMPERATURE')" ]

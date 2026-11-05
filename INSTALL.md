@@ -90,7 +90,7 @@ Installs from before the rename to halOS (the 0.18.23 alphas) follow
 `halos-flash` tag moves them over. Their files, settings and models stay as they are.
 
 Add `-no-npu` to the tag on that edition. Once a stable release is out, switch to the plain
-version tag, such as `:0.18.23`. From then on, `sudo bootc upgrade --apply` picks up Fedora
+version tag, such as `:0.19.0`. From then on, `sudo bootc upgrade --apply` picks up Fedora
 updates for that Halogen version. `sudo bootc status` shows which tag a machine follows.
 
 To build an ISO yourself, see [BUILDING.md](BUILDING.md).

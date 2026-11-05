@@ -52,7 +52,7 @@ RUN dnf -y --setopt=install_weak_deps=False install \
 
 COPY files/ /
 COPY variants/${HALOGEN_VARIANT}/ /
-COPY LICENSE THIRD-PARTY-NOTICES.md /usr/share/licenses/halos/
+COPY LICENSE THIRD-PARTY-NOTICES.md /usr/share/licenses/halos-flash/
 COPY --from=xrt /out/lib/ /usr/lib/halogen/xrt/
 COPY --from=xrt /out/licenses/ /usr/share/licenses/halogen-xrt/
 COPY --from=xrt /out/VERSION /usr/lib/halogen/xrt/VERSION

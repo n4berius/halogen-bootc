@@ -25,7 +25,7 @@ RUN dnf -y install \
 
 RUN mkdir -p /boot/efi && cp -ra /usr/lib/efi/*/*/EFI /boot/efi
 
-COPY LICENSE THIRD-PARTY-NOTICES.md /usr/share/licenses/halos/
+COPY LICENSE THIRD-PARTY-NOTICES.md /usr/share/licenses/halos-flash/
 COPY installer/buildstamp /.buildstamp
 COPY installer/iso.yaml /usr/lib/image-builder/bootc/iso.yaml
 COPY installer/anaconda/10-halogen.conf /etc/anaconda/conf.d/10-halogen.conf
