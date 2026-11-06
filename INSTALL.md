@@ -284,7 +284,7 @@ What `flash pull` does:
   one, the vision tower, and `tokenizer/`. The lookup table (`qwen38-flash-next-ngram.hgn`,
   about 48 GB) is fetched only when the checkpoint doesn't carry its own; Halogen's server
   says which. If it is the very same file as the official one, that file is shared instead,
-  using no extra disk. Nothing else in the repository is downloaded, so there's no Python pickle or
+  using no extra disk (`flash list` still counts it in the checkpoint's size). Nothing else in the repository is downloaded, so there's no Python pickle or
   script to run.
 - **Several checkpoints.** If the repository holds more than one `.hgn` checkpoint, choose one
   with `--file <name>.hgn`.

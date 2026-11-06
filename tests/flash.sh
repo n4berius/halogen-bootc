@@ -92,7 +92,8 @@ if grep -v -- "-v $work/models/flash/mine:/models/flash/mine " "$work/runs" | gr
 grep 'podman run' "$work/podman.log" | grep -- '--entrypoint python3' > "$work/runs"
 if grep -q -- ' -v ' "$work/runs"; then fail "the listing had a folder mounted"; fi
 grep 'podman run' "$work/podman.log" | grep -e ' verify ' -e flash_serve > "$work/runs"
-if grep -q -- '--ipc=host' "$work/runs" || grep -v -- '--read-only --tmpfs /tmp' "$work/runs" | grep -q .; then fail "a check tool shares the server's IPC or a writable image"; fi
+if grep -q -- '--network=none --cap-drop=all' "$work/runs"; then :; else fail "a check tool had network or capabilities"; fi
+if grep -v -- "-v $work/models:/models:ro " "$work/runs" | grep -q .; then fail "a check tool could write the models"; fi
 ok "a pull fetches only what Halogen loads, at the exact commit, checks it and records it"
 
 # A checkpoint that carries its own lookup table doesn't need the 48 GB file.
@@ -193,4 +194,13 @@ printf 'other' > "$work/models/qwen38-flash-next-ngram.hgn"
 pull someone/Same-Table --as differs || fail "pull failed"
 grep -q ngram "$work/hf.log" || fail "a different table was not downloaded"
 ok "a lookup table identical to the official one is shared rather than downloaded"
+
+# A new commit with a different lookup table replaces the old one, never writing through a link.
+reset_repo; cp "$work/repo/qwen38-flash-next-ngram.hgn" "$work/models/qwen38-flash-next-ngram.hgn"
+pull someone/Moving-Table --as moving || fail "pull failed"
+put qwen38-flash-next-ngram.hgn newtab
+pull someone/Moving-Table --as moving || fail "a new table was not taken"
+[ "$(cat "$work/models/flash/moving/qwen38-flash-next-ngram.hgn")" = newtab ] || fail "the old table stayed"
+[ "$(cat "$work/models/qwen38-flash-next-ngram.hgn")" = table ] || fail "the official table was changed"
+ok "a new commit's lookup table replaces the old one, and the official table is never changed"
 

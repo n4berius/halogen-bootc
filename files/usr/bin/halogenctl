@@ -31,9 +31,10 @@ served_flash() {
     /models/"$official"|'') echo official ;;
     *) echo unknown ;;
   esac
-  grep '^halogen-config: .*official one' <<< "$out" | tail -n 1 | sed 's/^halogen-config: //' | tr -cd '[:print:]' || true
+  why="$(grep '^halogen-config: .*official one' <<< "$out" | tail -n 1 | sed 's/^halogen-config: //' | tr -cd '[:print:]' || true)"
+  echo "${why:-see sudo halogenctl config and sudo halogenctl logs}"
 }
-flash_info() { as_owner sed -n "s/^$2=//p" "$models/flash/$1/halos.info" 2>/dev/null | tail -n 1 | tr -cd '[:print:]'; }
+flash_info() { as_owner sed -n "s/^$2=//p" "$models/flash/$1/halos.info" 2>/dev/null | tail -n 1 | tr -cd '[:print:]' || true; }
 
 case "${1:-status}" in
   status)

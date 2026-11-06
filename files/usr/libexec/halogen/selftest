@@ -244,7 +244,7 @@ else
   # What Halogen gets: render-config serves the official checkpoint if yours is missing or failed.
   rendered="$(run systemd-run --machine=halogen@.host --user --pipe --wait --quiet /usr/libexec/halogen/render-config --show)"
   why="$(printf '%s\n' "$rendered" | grep '^halogen-config: .*official one' | tail -n 1 | sed 's/^halogen-config: //' | tr -cd '[:print:]')"
-  if printf '%s\n' "$rendered" | grep -q "^HALOGEN_CHECKPOINT=/models/flash/$flash/"; then why=""
+  if grep -q "^HALOGEN_CHECKPOINT=/models/flash/$flash/" <<< "$rendered"; then why=""
   elif [ -z "$why" ]; then why="see sudo halogenctl config"; fi
   if [ -n "$why" ]; then say WARN flash "you chose your own Flash checkpoint $flash, but Halogen serves the official one: $why"
   elif [ "${running:-1}" = 1 ]; then say INFO flash "serving your own Flash checkpoint $flash${from:+ ($from)}"

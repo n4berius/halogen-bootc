@@ -34,12 +34,12 @@ online() {
     -e HF_HOME=/tmp/hf -e HF_HUB_OFFLINE=0 -e HF_HUB_DISABLE_TELEMETRY=1 -e HF_HUB_DISABLE_PROGRESS_BARS=1 \
     "${token_args[@]}" "${mounts[@]}" --entrypoint "$1" "$HALOGEN_IMAGE" "${@:2}"
 }
-# Halogen's own tools on a downloaded file: offline, no capabilities, a read-only image and
-# models, and the GPU devices the fetch gives verify. Not --ipc=host: unlike the server they
-# share nothing with another process, so they get none of the running server's shared memory.
+# Halogen's own tools on a downloaded file: offline, no capabilities, read-only models, and
+# exactly the flags the fetch gives the official verify. --ipc=host stays: Halogen's docs run
+# its tools with it, because without it SELinux refuses the container the GPU on Fedora.
 offline() {
-  podman run --rm --pull=never --read-only --tmpfs /tmp --device /dev/kfd --device /dev/dri --group-add keep-groups \
-    --ulimit memlock=-1:-1 -v "$models:/models:ro" \
+  podman run --rm --pull=never --device /dev/kfd --device /dev/dri --group-add keep-groups \
+    --ipc=host --ulimit memlock=-1:-1 -v "$models:/models:ro" \
     --network=none --cap-drop=all --security-opt no-new-privileges "$@"
 }
 info_get() { sed -n "s/^$2=//p" "$1" 2>/dev/null | tail -n 1; }
@@ -206,6 +206,11 @@ own_table="$(awk '{ print $2 }' <<< "$facts")"
 if [ "$own_table" = 1 ]; then
   echo "The checkpoint carries its own lookup table."
 elif has "$table"; then
+  # A table from an earlier pull that this commit doesn't have goes first (a link is removed,
+  # never written through, so the official table is never touched).
+  if [ -e "$dir/$table" ] && [ "$(sha256sum "$dir/$table" | cut -d' ' -f1)" != "$(sha_of "$table")" ]; then
+    rm -f -- "$dir/$table"
+  fi
   # Many builds of the same model share the official table. Then the same file is linked in
   # (a hard link: no extra disk, and Halogen sees a plain file), not downloaded again.
   if [ "$(stat -c %s "$models/$table" 2>/dev/null)" = "$(size_of "$table")" ] && [ ! -e "$dir/$table" ] &&

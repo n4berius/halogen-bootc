@@ -16,8 +16,8 @@ untrusted input to Halogen. halOS limits what such a file can reach:
 - **Download.** It runs in Halogen's pinned image as the unprivileged `halogen` user, with no
   capabilities and no NPU device. A Flash checkpoint's download sees only its own folder, and
   the listing sees no folder at all.
-- **Checks.** Halogen's `verify` and its lookup-table question run offline, read-only, with
-  no capabilities and none of the running server's shared memory.
+- **Checks.** Halogen's `verify` and its lookup-table question run offline, with read-only
+  models and no capabilities, the same way the official checkpoint is checked.
 - **Only known files.** `flash pull` downloads only the files Halogen loads, by name, at an
   exact commit: the `.hgn` files, and the tokenizer's data files (`.json`, `.jinja`, `.txt`,
   `.model`, `.tiktoken`). No pickle or script comes along. `model pull` skips pickle and other

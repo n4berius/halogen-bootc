@@ -75,7 +75,7 @@ case "$choice" in ''|official|[!A-Za-z0-9]*) ;; *)
   if [ -f "$info" ] && [ "$(sed -n 's/^verified=//p' "$info" | tail -n 1)" = pass ] &&
      [ "$(sed -n 's/^verified_with=//p' "$info" | tail -n 1)" != "$HALOGEN_VERSION" ]; then
     echo "halogen-fetch: checking your Flash checkpoint $choice again with Halogen $HALOGEN_VERSION"
-    "$flash_tool" verify "$choice" || echo "halogen-fetch: $choice failed; Halogen serves the official checkpoint" >&2
+    "$flash_tool" verify "$choice" || echo "halogen-fetch: $choice failed the check, so Halogen serves the official checkpoint. Check it again: sudo halogenctl flash verify $choice" >&2
   fi ;;
 esac
 
