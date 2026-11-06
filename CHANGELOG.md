@@ -10,6 +10,9 @@ promoted.
 
 ## Unreleased
 
+- Images are also signed with halOS's own key, and every image carries its public key at
+  `/etc/pki/containers/halos-flash.pub`. A later release makes machines refuse images without
+  that signature. (#65)
 - This changelog, and [ROADMAP.md](ROADMAP.md): what comes next on the way to a stable release.
   (#62)
 - **"API ready" at a glance.** The login screen shows Halogen's state: downloading with a

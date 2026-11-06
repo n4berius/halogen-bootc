@@ -81,6 +81,8 @@ jobs:
   image:
     needs: info
     runs-on: ubuntu-24.04
+    # The signing key lives in the "signing" environment, which only main and v* tags may use (#46).
+    environment: signing
     # id-token: signing the pushed images with GitHub's identity (scripts/sign-image.sh).
     permissions:
       contents: read
@@ -110,7 +112,7 @@ jobs:
         env:
           HALOS_RELEASE: ${{ needs.info.outputs.tag }}
         run: scripts/build.sh
-      - name: Push
+      - name: Push the exact tag
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -129,7 +131,20 @@ jobs:
           suffix=""; [ "$HALOGEN_VARIANT" = npu ] || suffix="-no-npu"
           podman push "$image"
           git show origin/main:scripts/sign-image.sh > "$RUNNER_TEMP/sign-image.sh"
-          GITHUB_TOKEN="$GH_TOKEN" bash "$RUNNER_TEMP/sign-image.sh" "$image"
+          { echo "IMAGE=$image"; echo "CHANNELS=$channels"; } >> "$GITHUB_ENV"
+      - name: Sign
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # halOS's own signing key (#46): only this step gets it, and it runs only main's script.
+          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+        run: GITHUB_TOKEN="$GH_TOKEN" bash "$RUNNER_TEMP/sign-image.sh" "$IMAGE"
+      - name: Move the channels
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          base="${IMAGE%:*}"; suffix=""; [ "$HALOGEN_VARIANT" = npu ] || suffix="-no-npu"
+          channels="$CHANNELS"
           # One channel per call, which the push script of older code also accepts.
           refs=()
           for channel in $channels; do

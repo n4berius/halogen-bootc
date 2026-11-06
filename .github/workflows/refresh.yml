@@ -11,6 +11,8 @@ permissions:
 jobs:
   refresh:
     runs-on: ubuntu-24.04
+    # The signing key lives in the "signing" environment, which only main and v* tags may use (#46).
+    environment: signing
     strategy:
       fail-fast: false
       matrix:
@@ -41,17 +43,25 @@ jobs:
       - if: steps.stable.outputs.tag != ''
         env:
           TAG: ${{ steps.stable.outputs.tag }}
-        run: git checkout "$TAG"
-      - name: Rebuild and push
+        run: |
+          # Only a release made from main is rebuilt and signed, as release.yml requires.
+          git merge-base --is-ancestor "$TAG" origin/main || { echo "$TAG is not on main; nothing rebuilt" >&2; exit 1; }
+          git checkout "$TAG"
+      - name: Rebuild
+        if: steps.stable.outputs.tag != ''
+        env:
+          TAG: ${{ steps.stable.outputs.tag }}
+        run: |
+          eval "$(scripts/release-info.sh "$TAG" | grep '^image_tag=')"
+          # The push step below needs the same names; it alone gets the signing key.
+          { echo "IMAGE_TAG=$image_tag"; echo "HALOS_RELEASE=${TAG#v}"; } >> "$GITHUB_ENV"
+          IMAGE_TAG="$image_tag" HALOS_RELEASE="${TAG#v}" scripts/build.sh
+      - name: Push the exact tag
         if: steps.stable.outputs.tag != ''
         env:
           TAG: ${{ steps.stable.outputs.tag }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          eval "$(scripts/release-info.sh "$TAG" | grep '^image_tag=')"
-          export IMAGE_TAG="$image_tag"
-          export HALOS_RELEASE="${TAG#v}"
-          scripts/build.sh
           echo "$GH_TOKEN" | podman login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
           # Worked out just before pushing, with every tag so far, so a release made during
           # this build counts and no channel moves back.
@@ -66,7 +76,22 @@ jobs:
           image="$(scripts/image-ref.sh)"; base="${image%:*}"
           suffix=""; [ "$HALOGEN_VARIANT" = npu ] || suffix="-no-npu"
           podman push "$image"
-          GITHUB_TOKEN="$GH_TOKEN" bash "$RUNNER_TEMP/sign-image.sh" "$image"
+          { echo "IMAGE=$image"; echo "CHANNELS=$channels"; } >> "$GITHUB_ENV"
+      - name: Sign
+        if: steps.stable.outputs.tag != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # halOS's own signing key (#46): only this step gets it, and it runs only main's script.
+          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+        run: GITHUB_TOKEN="$GH_TOKEN" bash "$RUNNER_TEMP/sign-image.sh" "$IMAGE"
+      - name: Move the channels
+        if: steps.stable.outputs.tag != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          base="${IMAGE%:*}"; suffix=""; [ "$HALOGEN_VARIANT" = npu ] || suffix="-no-npu"
+          channels="$CHANNELS"
           # One channel per call, which the push script of older releases also accepts.
           refs=()
           for channel in $channels; do
