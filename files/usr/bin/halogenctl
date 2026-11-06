@@ -34,8 +34,12 @@ case "${1:-status}" in
     # Every option this release offers (the edition's template), and whether halogen.env has it.
     # --new: only the ones halogen.env doesn't mention yet, set or commented.
     template="${HALOGEN_ENV_TEMPLATE:-/usr/share/halogen/halogen.env.default}"
+    case "${2:-}" in ''|--new) ;; *) echo "usage: halogenctl options [--new]" >&2; exit 2 ;; esac
+    # Without sudo (runuser refuses) or with no readable halogen.env, every option would look new.
+    as_owner test -r "$configs/halogen.env" 2>/dev/null \
+      || { echo "Cannot read $configs/halogen.env. Run it with sudo: sudo halogenctl options ${2:-}" >&2; exit 1; }
     mine="$( { as_owner grep -oE '^#?[[:space:]]*HALOGEN_[A-Z0-9_]+=' "$configs/halogen.env" 2>/dev/null || true; } | tr -d '#= \t' | sort -u | tr '\n' ' ')"
-    set_now="$( { as_owner grep -oE '^HALOGEN_[A-Z0-9_]+=' "$configs/halogen.env" 2>/dev/null || true; } | tr -d '=' | sort -u | tr '\n' ' ')"
+    set_now="$( { as_owner grep -oE '^[[:space:]]*HALOGEN_[A-Z0-9_]+=' "$configs/halogen.env" 2>/dev/null || true; } | tr -d '= \t' | sort -u | tr '\n' ' ')"
     awk -v only_new="$([ "${2:-}" = --new ] && echo 1 || echo 0)" -v mine="$mine" -v set_now="$set_now" '
       BEGIN { n = split(mine, a, " "); for (i = 1; i <= n; i++) have[a[i]] = 1
               n = split(set_now, b, " "); for (i = 1; i <= n; i++) on[b[i]] = 1 }

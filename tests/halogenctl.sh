@@ -76,4 +76,10 @@ fi
 [ "$(grep -c '^  HALOGEN_' "$work/out")" = "$(grep -cE '^#?HALOGEN_' "$template")" ] || { echo "options missed some" >&2; exit 1; }
 cp "$template" "$work/configs/halogen.env"
 HALOGEN_ENV_TEMPLATE="$template" "$ctl" options --new | grep -q '^Nothing new' || { echo "a complete file still had new options" >&2; exit 1; }
-ok "options lists every option as set, commented or new, and --new only the missing ones"
+printf '  HALOGEN_KV8=1\n' >> "$work/configs/halogen.env"
+HALOGEN_ENV_TEMPLATE="$template" "$ctl" options | grep -qE '^  HALOGEN_KV8 +set ' || { echo "an indented setting was not shown as set" >&2; exit 1; }
+rm "$work/configs/halogen.env"
+if HALOGEN_ENV_TEMPLATE="$template" "$ctl" options --new > "$work/out" 2>&1; then echo "options ran without a readable halogen.env" >&2; exit 1; fi
+grep -q 'Run it with sudo' "$work/out" || { cat "$work/out" >&2; exit 1; }
+if "$ctl" options --nwe > /dev/null 2>&1; then echo "a misspelled flag was accepted" >&2; exit 1; fi
+ok "options lists every option as set, commented or new, and --new only the missing ones; it refuses an unreadable file and a wrong flag"
