@@ -12,7 +12,7 @@ Fedora packages change with each rebuild. For the exact list in a built image, r
 
 | Component | Version | License | How it is used |
 |---|---|---|---|
-| [halogen-flash-server](https://github.com/peonist-ai/halogen-flash-server) image and engine | 0.19.0, commit `826c74f` | [halogen EULA](https://github.com/peonist-ai/halogen-flash-server/blob/main/LICENSE.md) | Unmodified. Pulled from `ghcr.io/peonist-ai/halogen-flash-server` by digest on first boot, and not included in the OS image or ISO |
+| [halogen-flash-server](https://github.com/peonist-ai/halogen-flash-server) image and engine | 0.19.1, commit `47ceb43` | [halogen EULA](https://github.com/peonist-ai/halogen-flash-server/blob/main/LICENSE.md) | Unmodified. Pulled from `ghcr.io/peonist-ai/halogen-flash-server` by digest on first boot, and not included in the OS image or ISO |
 | `halogen-fabric-clock` | Same commit | halogen EULA | Unmodified copy in the NPU edition's OS image, checked by SHA-256 |
 | ROCm, Python and NPU components inside the Halogen image | See upstream | [Halogen's notices](https://github.com/peonist-ai/halogen-flash-server/blob/main/THIRD-PARTY-NOTICES.md) | Governed by Halogen's own notices |
 
