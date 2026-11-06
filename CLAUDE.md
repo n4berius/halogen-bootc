@@ -73,8 +73,9 @@ name, but allows saying halOS runs Halogen.
   setup` asks TPM unlock (`halogen-enroll-tpm`), HF token (`halogenctl hf-token`), and editing
   `halogen.env` the sudoedit way (root edits a private copy, written back as halogen; never an
   editor as halogen on root's tty), then removes the marker; `--skip` removes it at once. The VM
-  test checks the pending line, then skips. On the serial console, `agetty --reload` can redraw
-  over output, so VM-test greps match only part of a line.
+  test checks the pending line, then skips. On the serial console, `agetty --reload` can swallow
+  output written while the status changes, so the VM test saves such output to a file and prints
+  it later.
 - Settings: users edit `/srv/configs/halogen.env`. `render-config` keeps only the names in
   `options.allowed`, and `locked.env` wins over it. `halogenctl config` shows the result.
   `halogen.env` is copied once and never changed by halOS. `prepare` rewrites
