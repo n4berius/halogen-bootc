@@ -22,6 +22,15 @@ fi
 # shellcheck disable=SC2016 # expanded by the halogen shell, from its arguments
 as_halogen sh -c '[ -e "$1" ] || [ -L "$1" ] || install -m 0640 "$2" "$1"' \
   sh "$configs/halogen.env" "${HALOGEN_ENV_DEFAULT:-/usr/share/halogen/halogen.env.default}"
+# halogen.env is yours and never changes after the first boot. Beside it, a reference of every
+# option this release offers, rewritten at every boot (sudo halogenctl options --new: what's new).
+# shellcheck disable=SC2016
+as_halogen sh -c 'umask 027
+  { echo "# Reference only: every option this halOS release offers, rewritten at every boot."
+    echo "# Copy a line into halogen.env to use it. Options you do not mention yet: sudo halogenctl options --new"
+    echo; cat "$2"; } > "$1.new" && mv -f "$1.new" "$1"' \
+  sh "$configs/halogen.env.example" "${HALOGEN_ENV_DEFAULT:-/usr/share/halogen/halogen.env.default}" \
+  || echo "halogen-prepare: could not write halogen.env.example (a reference only; nothing else is affected)" >&2
 # shellcheck disable=SC2016
 as_halogen sh -c 'umask 077; [ -e "$1" ] || [ -L "$1" ] || head -c 32 /dev/urandom | od -An -tx1 | tr -d " \n" > "$1"' \
   sh "$configs/api-key"

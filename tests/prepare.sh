@@ -27,6 +27,10 @@ grep -qx 'HALOGEN_FLASH_CTX=1' "$work/configs/halogen.env"
 grep '^root install' "$work/log" | grep -q "$work/models/npu" && { echo "root created a folder inside /srv/models" >&2; exit 1; }
 grep -q "runuser -u halogen -- install -d -m 0750 $work/models/npu" "$work/log"
 grep -q "runuser -u halogen -- sh -c .* $work/configs/api-key" "$work/log"
+if ! grep -q '^# Reference only' "$work/configs/halogen.env.example" || ! grep -qx 'HALOGEN_FLASH_CTX=1' "$work/configs/halogen.env.example" ||
+   ! grep -q "sh $work/configs/halogen.env.example " "$work/log"; then
+  echo "halogen.env.example was not written as halogen" >&2; exit 1
+fi
 ok "root creates only the top folders; the model folders, settings and API key are made as halogen"
 
 key="$(cat "$work/configs/api-key")"; "$prepare"
@@ -37,4 +41,9 @@ ln -s "$work/outside/stolen-key" "$work/configs/api-key"; ln -s "$work/outside/s
 if [ -e "$work/outside/stolen-key" ] || [ -e "$work/outside/stolen-env" ]; then
   echo "prepare followed a link planted in /srv/configs" >&2; exit 1
 fi
-ok "it keeps the API key on later boots and never follows a link where a file should be"
+# A newer release's template replaces the reference; halogen.env itself stays as it was.
+echo 'HALOGEN_FLASH_CTX=2' > "$work/default.env"; echo 'HALOGEN_FLASH_CTX=1' > "$work/configs/halogen.env.keep"
+rm "$work/configs/halogen.env"; cp "$work/configs/halogen.env.keep" "$work/configs/halogen.env"; "$prepare"
+grep -qx 'HALOGEN_FLASH_CTX=2' "$work/configs/halogen.env.example" || { echo "the reference was not refreshed" >&2; exit 1; }
+cmp -s "$work/configs/halogen.env" "$work/configs/halogen.env.keep" || { echo "halogen.env changed" >&2; exit 1; }
+ok "it keeps the API key on later boots and never follows a link where a file should be; the reference is refreshed and halogen.env left alone"

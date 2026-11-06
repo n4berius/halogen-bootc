@@ -19,7 +19,8 @@ ACTIVE = {
     },
     "no-npu": {},
 }
-HEADER = """# Halogen settings for this machine. Copied once to /srv/configs/halogen.env.
+HEADER = """# Halogen settings for this machine. Copied once to /srv/configs/halogen.env, then it is yours.
+# After an update, sudo halogenctl options --new lists options your file doesn't mention yet.
 #
 # Uncomment a line and set its value, then run: sudo halogenctl restart
 # Check what is in effect with: sudo halogenctl config

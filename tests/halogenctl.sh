@@ -61,6 +61,32 @@ mkdir -p "$work/models/LFM/old-model"; echo w > "$work/models/LFM/old-model/x"
 grep -q "runuser -u halogen -- rm -rf -- $work/models/LFM/old-model" "$work/log" || { echo "model remove deleted as root" >&2; exit 1; }
 ok "model remove deletes as halogen"
 
+# options: every option this release offers, and which ones halogen.env doesn't mention yet.
+template="$repo/variants/npu/usr/share/halogen/halogen.env.default"
+grep -v -e '^#HALOGEN_KV8=' -e '^#HALOGEN_ACCESS_LOG=' "$template" | sed 's/^#HALOGEN_MTP_GATE_P=$/HALOGEN_MTP_GATE_P=0.8/' > "$work/configs/halogen.env"
+HALOGEN_ENV_TEMPLATE="$template" "$ctl" options --new > "$work/out"
+if [ "$(grep -c '^  HALOGEN_' "$work/out")" != 2 ] || ! grep -qE '^  HALOGEN_KV8 +new +.' "$work/out" ||
+   ! grep -qE '^  HALOGEN_ACCESS_LOG +new ' "$work/out"; then
+  cat "$work/out" >&2; echo "options --new should list exactly the two missing options" >&2; exit 1
+fi
+HALOGEN_ENV_TEMPLATE="$template" "$ctl" options > "$work/out"
+if ! grep -qE '^  HALOGEN_MTP_GATE_P +set ' "$work/out" || ! grep -qE '^  HALOGEN_MTP_DEPTH +commented ' "$work/out"; then
+  cat "$work/out" >&2; echo "options should mark set and commented" >&2; exit 1
+fi
+[ "$(grep -c '^  HALOGEN_' "$work/out")" = "$(grep -cE '^#?HALOGEN_' "$template")" ] || { echo "options missed some" >&2; exit 1; }
+cp "$template" "$work/configs/halogen.env"
+# Through a file, not a pipe: grep -q stops reading early, and with pipefail that fails the check.
+HALOGEN_ENV_TEMPLATE="$template" "$ctl" options --new > "$work/out"
+grep -q '^Nothing new' "$work/out" || { cat "$work/out" >&2; echo "a complete file still had new options" >&2; exit 1; }
+printf '  HALOGEN_KV8=1\n' >> "$work/configs/halogen.env"
+HALOGEN_ENV_TEMPLATE="$template" "$ctl" options > "$work/out"
+grep -qE '^  HALOGEN_KV8 +set ' "$work/out" || { cat "$work/out" >&2; echo "an indented setting was not shown as set" >&2; exit 1; }
+rm "$work/configs/halogen.env"
+if HALOGEN_ENV_TEMPLATE="$template" "$ctl" options --new > "$work/out" 2>&1; then echo "options ran without a readable halogen.env" >&2; exit 1; fi
+grep -q 'Run it with sudo' "$work/out" || { cat "$work/out" >&2; exit 1; }
+if "$ctl" options --nwe > /dev/null 2>&1; then echo "a misspelled flag was accepted" >&2; exit 1; fi
+ok "options lists every option as set, commented or new, and --new only the missing ones; it refuses an unreadable file and a wrong flag"
+
 # model list: a clear "none yet" with no own checkpoints, then Halogen's NPU models one per line.
 rm -rf "$work/models"; mkdir -p "$work/models/npu/d3-lite" "$work/models/npu/qwen3.5-2b" "$work/models/LFM" "$work/models/decider" "$work/models/custom"
 printf 'HALOGEN_NPU_MODELS=qwen3.5-2b:fast\n' > "$work/configs/halogen.env"
