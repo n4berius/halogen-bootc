@@ -41,7 +41,9 @@ out="$("$pull" LiquidAI/LFM3-1.7B 2>&1)"
 grep -qx 'path=/models/LFM/LFM3-1.7B' <<< "$out" && grep -qx 'fast=1' <<< "$out"
 if grep -q 'Hint:' <<< "$out"; then echo "hf noise reached the user" >&2; exit 1; fi
 grep -q -- "--exclude \*.gguf" "$work/podman.log"
-ok "an LFM3 checkpoint lands in LFM, with its path and :fast named, and other formats skipped"
+grep 'halogen-npu' "$work/podman.log" | grep -q -- '--network=none' || { echo "the probe of an untrusted checkpoint had network" >&2; exit 1; }
+if grep 'entrypoint hf' "$work/podman.log" | grep -q -- '--network=none'; then echo "the download lost its network" >&2; exit 1; fi
+ok "an LFM3 checkpoint lands in LFM, with its path and :fast named, and other formats skipped; only the download has network"
 
 FAKE_BASE=d1-2b "$pull" LiquidAI/d1-2B --as my-d1 --revision abc > "$work/out" 2>&1
 [ -d "$work/models/decider/my-d1" ] && grep -qx 'path=/models/decider/my-d1' "$work/out"

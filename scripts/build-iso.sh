@@ -18,7 +18,7 @@ podman build --pull=newer -t "$INSTALLER" -f Containerfile.installer \
 # Upstream's build, because embedding the OS needs newer support than Fedora's package.
 podman run --rm --privileged --security-opt label=disable \
   -v /dev:/dev -v /var/lib/containers/storage:/var/lib/containers/storage \
-  -v "$PWD/output:/output" "${IMAGE_BUILDER:-ghcr.io/osbuild/image-builder-cli:latest}" \
+  -v "$PWD/output:/output" "${IMAGE_BUILDER:?pin IMAGE_BUILDER in versions.env}" \
   build --bootc-ref "$INSTALLER" --bootc-installer-payload-ref "$TARGET" \
   --bootc-default-fs xfs --output-dir /output generic-iso
 find output -name '*.iso' -exec ls -lh {} +

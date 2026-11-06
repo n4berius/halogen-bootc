@@ -8,6 +8,17 @@ Before=user@970.service
 Type=oneshot
 RemainAfterExit=yes
 ExecStart=/usr/libexec/halogen/prepare
+# A root job that works in halogen's folders: let it write only there, with no network.
+# Costs nothing; it runs for well under a second at boot.
+ProtectSystem=strict
+ReadWritePaths=/var/srv/models /var/srv/configs /var/lib/halogen
+ProtectHome=yes
+PrivateTmp=yes
+PrivateNetwork=yes
+NoNewPrivileges=yes
+RestrictAddressFamilies=AF_UNIX
+RestrictSUIDSGID=yes
+LockPersonality=yes
 
 [Install]
 WantedBy=multi-user.target

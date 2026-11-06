@@ -7,6 +7,14 @@ Before=user@970.service
 [Service]
 Type=oneshot
 ExecStart=/usr/libexec/halogen/halogen-fabric-clock hold
+# It only writes GPU clock settings in /sys, which ProtectSystem leaves writable. No
+# ProtectKernelTunables or PrivateDevices: those would stop the clock hold itself.
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateNetwork=yes
+NoNewPrivileges=yes
+RestrictAddressFamilies=AF_UNIX
 
 [Install]
 WantedBy=multi-user.target suspend.target hibernate.target hybrid-sleep.target suspend-then-hibernate.target
