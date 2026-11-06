@@ -84,14 +84,31 @@ case "${1:-status}" in
         fi
         ;;
       list)
-        printf '%-28s %-8s %-8s %s\n' NAME FOLDER SIZE "IN USE"
+        # What HALOGEN_NPU_MODELS serves now (one read, not one per model), without :fast.
+        # Each read may fail (no npu folder yet, the halogen user's services down): still list.
+        active="$( { as_halogen /usr/libexec/halogen/render-config --show 2>/dev/null || true; } | sed -n 's/^HALOGEN_NPU_MODELS=//p' | tr ',' '\n' | sed 's/:fast$//')"
+        used() { if grep -qxF -- "$1" <<< "$active"; then echo yes; else echo no; fi; }
+        echo "Your own checkpoints (/srv/models/decider, LFM and custom):"
+        n=0
         for dir in "$models"/decider/*/ "$models"/LFM/*/ "$models"/custom/*/; do
           [ -d "$dir" ] || continue
           dir="${dir%/}"; rel="${dir#"$models"/}"
-          used=no; ! in_use "/models/$rel" || used=yes
-          printf '%-28s %-8s %-8s %s\n' "$(basename "$dir")" "${rel%%/*}" "$(as_owner du -sh "$dir" | cut -f1)" "$used"
+          [ "$n" -gt 0 ] || printf '  %-28s %-8s %-8s %s\n' NAME FOLDER SIZE "IN USE"
+          printf '  %-28s %-8s %-8s %s\n' "$(basename "$dir")" "${rel%%/*}" "$(as_owner du -sh "$dir" | cut -f1)" "$(used "/models/$rel")"
+          n=$((n + 1))
         done
-        echo "Halogen's own NPU models: $(find "$models/npu" -mindepth 1 -maxdepth 1 -type d -printf '%f ' 2>/dev/null)"
+        [ "$n" -gt 0 ] || echo "  None yet. Add one with: sudo halogenctl model pull <Hugging Face repo>"
+        echo
+        echo "Halogen's NPU models (/srv/models/npu):"
+        names="$( { find "$models/npu" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' 2>/dev/null || true; } | sort)"
+        if [ -z "$names" ]; then echo "  None downloaded yet."
+        else
+          printf '  %-28s %s\n' NAME "IN USE"
+          while read -r name; do printf '  %-28s %s\n' "$name" "$(used "$name")"; done <<< "$names"
+        fi
+        echo
+        echo "IN USE: listed in HALOGEN_NPU_MODELS (sudo halogenctl config). Halogen may add others itself,"
+        echo "such as the agent guard's models."
         ;;
       remove)
         name="${3:-}"
