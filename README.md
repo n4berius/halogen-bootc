@@ -216,7 +216,8 @@ name `ghcr.io/n4berius/halogen-flash-bootc`) switch once by hand, then use `halo
 `sudo bootc switch ghcr.io/n4berius/halos-flash:alpha` (or `beta`, `rc`, `stable`; add
 `-no-npu` on that edition).
 
-To publish a new version, follow [RELEASING.md](RELEASING.md). NPU models are kept in one
+What each release changed is in [CHANGELOG.md](CHANGELOG.md), and what comes next in
+[ROADMAP.md](ROADMAP.md). To publish a new version, follow [RELEASING.md](RELEASING.md). NPU models are kept in one
 folder, `/srv/models/npu/<model>`, and every file is checked against the new version's record,
 so a new version downloads only the NPU files that changed. Rolling back to a version that
 keeps one folder too downloads only the files that differ. Rolling back to an image from before
