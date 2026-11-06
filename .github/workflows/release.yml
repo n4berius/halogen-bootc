@@ -81,6 +81,8 @@ jobs:
   image:
     needs: info
     runs-on: ubuntu-24.04
+    # The signing key lives in the "signing" environment, which only main and v* tags may use (#46).
+    environment: signing
     # id-token: signing the pushed images with GitHub's identity (scripts/sign-image.sh).
     permissions:
       contents: read

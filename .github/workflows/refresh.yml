@@ -11,6 +11,8 @@ permissions:
 jobs:
   refresh:
     runs-on: ubuntu-24.04
+    # The signing key lives in the "signing" environment, which only main and v* tags may use (#46).
+    environment: signing
     strategy:
       fail-fast: false
       matrix:

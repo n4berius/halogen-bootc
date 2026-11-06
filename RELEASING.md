@@ -75,8 +75,8 @@ right away and fails if either is missing:
   image digest, nothing else.
 - **With halOS's own key**, which is what machines will check. Fedora's image checks can't recognise
   GitHub's keyless identity, so a key pair does that job. The private key lives only in the
-  repository secrets `COSIGN_PRIVATE_KEY` and `COSIGN_PASSWORD` (and the owner's password
-  manager); the public key is [`files/etc/pki/containers/halos-flash.pub`](files/etc/pki/containers/halos-flash.pub),
+  secrets `COSIGN_PRIVATE_KEY` and `COSIGN_PASSWORD` of the `signing` environment, which only
+  `main` and `v*` tags may use (and in the owner's password manager); the public key is [`files/etc/pki/containers/halos-flash.pub`](files/etc/pki/containers/halos-flash.pub),
   in every image at `/etc/pki/containers/halos-flash.pub`.
 
 Keep the private key and its password backed up. Once machines enforce signatures, they accept

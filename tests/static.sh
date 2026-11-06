@@ -57,6 +57,10 @@ assert embedded + "\n" == open("files/etc/pki/containers/halos-flash.pub").read(
 for wf in ("build", "release", "refresh"):
     w = open(f".github/workflows/{wf}.yml").read()
     assert "COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}" in w, f"{wf}.yml doesn't pass the signing key"
+    # Every job that signs runs in the protected "signing" environment.
+    for job in yaml.safe_load(w)["jobs"].values():
+        if any(any(k.startswith("COSIGN_") for k in (st.get("env") or {})) for st in job.get("steps", [])):
+            assert "signing" in str(job.get("environment", "")), f"{wf}.yml signs outside the signing environment"
     # Only a step named Sign gets the key, and it runs nothing but the signing script.
     for job in yaml.safe_load(w)["jobs"].values():
         for step in job.get("steps", []):

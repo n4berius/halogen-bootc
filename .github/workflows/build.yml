@@ -21,6 +21,9 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-24.04
+    # The signing key lives in the "signing" environment, which only main and v* tags may use
+    # (#46). Pull requests run without it, since they never sign.
+    environment: ${{ (github.event_name != 'pull_request' && github.ref == 'refs/heads/main') && 'signing' || '' }}
     # id-token: signing the pushed edge image with GitHub's identity (scripts/sign-image.sh).
     permissions:
       contents: read

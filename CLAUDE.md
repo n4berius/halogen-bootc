@@ -124,7 +124,8 @@ name, but allows saying halOS runs Halogen.
   hardening. The ISO builder is pinned by digest (`IMAGE_BUILDER` in `versions.env`).
 - Every pushed image is signed with cosign by `scripts/sign-image.sh` (from main's copy, also when
   promoting old code), twice: keyless (public audit) and with halOS's key (`COSIGN_PRIVATE_KEY`
-  and `COSIGN_PASSWORD` repository secrets; public half in `files/etc/pki/containers/halos-flash.pub`
+  and `COSIGN_PASSWORD` in the `signing` environment, open only to `main` and `v*` tags; only a
+  job with `environment: signing` and only its step named Sign get them; public half in `files/etc/pki/containers/halos-flash.pub`
   and embedded in the script, `tests/static.sh` checks they match). containers/image can match a
   keyless signer only by email, not GitHub's workflow URI, so machines will check the key. Both
   are checked in the same job, including the classic `.sig` tag. Machines don't enforce it yet:
