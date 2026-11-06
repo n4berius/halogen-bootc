@@ -1,6 +1,11 @@
 #!/bin/bash
-# Sign a pushed image with cosign, keyless (GitHub's OIDC identity, no key to keep), then check
-# the signature the way machines will (#46). Run in a workflow job with `id-token: write`.
+# Sign a pushed image with cosign twice, then check both signatures (#46):
+#  - keyless (GitHub's OIDC identity), recorded in Sigstore's public log, for anyone to audit;
+#  - with halOS's own key (COSIGN_PRIVATE_KEY and COSIGN_PASSWORD, repository secrets), which is
+#    what machines check: containers/image can only match a keyless signer by email, and
+#    GitHub's workflow identity is a URI. The public half ships in the image as
+#    /etc/pki/containers/halos-flash.pub and is repeated below.
+# Run in a workflow job with `id-token: write`.
 # Usage: scripts/sign-image.sh <pushed repo:tag> [other tags of the same image to check ...]
 #        scripts/sign-image.sh --verify <repo:tag> ...   (check only, sign nothing)
 # The first ref gives the digest; one signature covers every tag pointing at it, so sign the
@@ -11,6 +16,12 @@ COSIGN_SHA256=064954c5d8c7e3b28188eee5b1727b31c411550bc5fefd41aa672d3c761d103a
 # Who may sign: this repository's publishing workflows, on main or on a release tag.
 IDENTITY='^https://github\.com/n4berius/halos-flash/\.github/workflows/(build|release|refresh)\.yml@refs/(heads/main|tags/v.+)$'
 ISSUER=https://token.actions.githubusercontent.com
+# The same as files/etc/pki/containers/halos-flash.pub (tests/static.sh checks they match).
+PUBLIC_KEY='-----BEGIN PUBLIC KEY-----
+MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEVLXJbN5v2XwGanVGZyWfIrmX3he8
+bFysLUF3azuwIUBhmbvNzPERgxn9rDNbraHldK+i4aBedqF6TFkK7l+1vg==
+-----END PUBLIC KEY-----'
+
 verify_only=0; [ "${1:-}" != --verify ] || { verify_only=1; shift; }
 [ $# -ge 1 ] || { echo "usage: sign-image.sh [--verify] <repo:tag> [repo:tag ...]" >&2; exit 2; }
 
@@ -24,7 +35,12 @@ cosign() { "$bin" "$@"; }
 # cosign reads Docker's credentials file, not podman's.
 [ -z "${GITHUB_TOKEN:-}" ] || echo "$GITHUB_TOKEN" | cosign login ghcr.io -u "${GITHUB_ACTOR:?}" --password-stdin
 
-verify() { cosign verify --certificate-oidc-issuer "$ISSUER" --certificate-identity-regexp "$IDENTITY" "$1" > /dev/null; }
+pub="${RUNNER_TEMP:-/tmp}/halos-flash.pub"; printf '%s\n' "$PUBLIC_KEY" > "$pub"
+# Both signatures must be there: the keyless one (public audit) and the key one (machines).
+verify() {
+  cosign verify --certificate-oidc-issuer "$ISSUER" --certificate-identity-regexp "$IDENTITY" "$1" > /dev/null
+  cosign verify --key "$pub" "$1" > /dev/null
+}
 if [ "$verify_only" = 1 ]; then
   for ref in "$@"; do verify "$ref"; echo "verified $ref"; done
   exit 0
@@ -36,6 +52,11 @@ digest="$(skopeo inspect --format '{{.Digest}}' "docker://$1")"
 case "$digest" in sha256:[0-9a-f]*) ;; *) echo "no digest for $1: $digest" >&2; exit 1 ;; esac
 echo "Signing $repo@$digest"
 cosign sign --yes "$repo@$digest"
+if [ -z "${COSIGN_PRIVATE_KEY:-}" ] || [ -z "${COSIGN_PASSWORD:-}" ]; then
+  echo "COSIGN_PRIVATE_KEY and COSIGN_PASSWORD are not set (repository secrets)" >&2; exit 1
+fi
+# The key comes from the environment, never a file or the command line.
+cosign sign --yes --key env://COSIGN_PRIVATE_KEY "$repo@$digest"
 verify "$repo@$digest"
 # Machines check through containers/image, which reads the classic "<digest>.sig" tag.
 skopeo inspect --raw "docker://$repo:${digest/:/-}.sig" > /dev/null \

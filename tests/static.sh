@@ -50,6 +50,13 @@ assert re.fullmatch(r"[0-9a-f]{40}", pins["HALOGEN_WEIGHTS_REVISION"]), "HALOGEN
 # Older Halogen images have no XRT of their own and need the host's.
 assert tuple(map(int, re.match(r"(\d+)\.(\d+)\.(\d+)", pins["HALOGEN_VERSION"]).groups())) >= (0, 19, 1), "Halogen before 0.19.1 needs the host's XRT"
 assert "DEBIAN_IMAGE" not in pins and "XRT_MIN_VERSION" not in pins
+# The public key machines get is the one the signing script checks with (#46).
+sign = open("scripts/sign-image.sh").read()
+embedded = re.search(r"PUBLIC_KEY='(-----BEGIN PUBLIC KEY-----.*?-----END PUBLIC KEY-----)'", sign, re.S).group(1)
+assert embedded + "\n" == open("files/etc/pki/containers/halos-flash.pub").read(), "the image's public key differs from sign-image.sh's"
+for wf in ("build", "release", "refresh"):
+    w = open(f".github/workflows/{wf}.yml").read()
+    assert "COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}" in w, f"{wf}.yml doesn't pass the signing key"
 print("static checks ok")
 P
 python3 -c "import glob, yaml; [yaml.safe_load(open(f)) for f in glob.glob('.github/**/*.yml', recursive=True)]"

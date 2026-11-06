@@ -122,9 +122,13 @@ name, but allows saying halOS runs Halogen.
   sandboxed (`ProtectSystem=strict`, no network); verify and the model probe run with no network
   or capabilities; `sysctl.d/60-halos.conf` and `sshd_config.d/00-halos.conf` hold the no-cost
   hardening. The ISO builder is pinned by digest (`IMAGE_BUILDER` in `versions.env`).
-- Every pushed image is signed keyless with cosign by `scripts/sign-image.sh` (from main's copy,
-  also when promoting old code), and checked in the same job, including the classic `.sig` tag
-  that containers/image reads. Machines don't enforce it yet (#46 phase 2).
+- Every pushed image is signed with cosign by `scripts/sign-image.sh` (from main's copy, also when
+  promoting old code), twice: keyless (public audit) and with halOS's key (`COSIGN_PRIVATE_KEY`
+  and `COSIGN_PASSWORD` repository secrets; public half in `files/etc/pki/containers/halos-flash.pub`
+  and embedded in the script, `tests/static.sh` checks they match). containers/image can match a
+  keyless signer only by email, not GitHub's workflow URI, so machines will check the key. Both
+  are checked in the same job, including the classic `.sig` tag. Machines don't enforce it yet:
+  the policy (#46 phase 2b) ships once every channel points to a key-signed image.
 
 ## Lessons already learned
 

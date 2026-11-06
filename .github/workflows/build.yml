@@ -59,6 +59,9 @@ jobs:
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && steps.changes.outputs.build == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Signing with halOS's own key (#46): only these steps get it.
+          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
         run: |
           echo "$GH_TOKEN" | podman login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
           edge="$(scripts/image-ref.sh | sed 's/:[^:]*$//'):edge$([ "$HALOGEN_VARIANT" = npu ] || echo -no-npu)"

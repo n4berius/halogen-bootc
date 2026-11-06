@@ -47,6 +47,9 @@ jobs:
         env:
           TAG: ${{ steps.stable.outputs.tag }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Signing with halOS's own key (#46): only these steps get it.
+          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
         run: |
           eval "$(scripts/release-info.sh "$TAG" | grep '^image_tag=')"
           export IMAGE_TAG="$image_tag"

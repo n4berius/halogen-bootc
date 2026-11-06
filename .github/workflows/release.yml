@@ -113,6 +113,9 @@ jobs:
       - name: Push
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Signing with halOS's own key (#46): only these steps get it.
+          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
         run: |
           echo "$GH_TOKEN" | podman login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
           # Which channels to move is worked out now, with every tag pushed so far, so a release
