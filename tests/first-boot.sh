@@ -72,7 +72,7 @@ echo HALOGEN_NPU_MODELS > "$work/allowed"
 export XDG_RUNTIME_DIR="$work/run" HALOGEN_ALLOWED_FILE="$work/allowed" HALOGEN_RENDER="$repo/files/usr/libexec/halogen/render-config"
 export HALOGEN_RELEASE_FILE="$work/release.env" HALOGEN_CONFIG_FILE="$work/config.env" HALOGEN_MODELS_DIR="$work/models" \
   HALOGEN_FETCH_HELPER="$HELPER_SRC" HALOGEN_MODELS_NEEDED_GIB=0 HALOGEN_RETRY_MAX_S=0 HALOGEN_PROGRESS_S=0 HALOGEN_HF_TOKEN_FILE="$work/hf-token"
-# shellcheck disable=SC2329 # called by the fetch script, through export -f
+# shellcheck disable=SC2317,SC2329 # called by the fetch script, through export -f
 sleep() { :; }; export -f sleep
 fetch="$repo/files/usr/libexec/halogen/fetch-models"
 sed 's/^wait_s=15$/wait_s=0/' "$fetch" > "$work/fetch"; chmod +x "$work/fetch"
@@ -228,11 +228,11 @@ fi
 [ ! -e "$work/state/setup-pending" ] || { echo "the marker stayed" >&2; exit 1; }
 # Setup finishing while it waits (the fake sleep removes the marker, as halosctl setup would).
 touch "$work/state/setup-pending"; rm -f "$work/models/.fetch-stamp"
-# shellcheck disable=SC2329 # called by the fetch script, through export -f
+# shellcheck disable=SC2317,SC2329 # called by the fetch script, through export -f
 sleep() { rm -f "$FAKE/state/setup-pending"; }; export -f sleep
 HALOGEN_STATE_DIR="$work/state" HALOGEN_SETUP_WAIT_S=3600 "$work/fetch" > "$work/out" 2>&1 || { cat "$work/out" >&2; exit 1; }
 if grep -q 'no setup after' "$work/out"; then echo "it waited for the time limit though setup was done" >&2; exit 1; fi
 grep -q 'models ready' "$work/out" || { cat "$work/out" >&2; exit 1; }
-# shellcheck disable=SC2329 # called by the fetch script, through export -f
+# shellcheck disable=SC2317,SC2329 # called by the fetch script, through export -f
 sleep() { :; }; export -f sleep
 ok "the first download waits for setup, and starts when it is done or after the time limit"
