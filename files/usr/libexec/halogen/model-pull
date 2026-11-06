@@ -61,8 +61,10 @@ if [ -d "$xrt" ]; then
   done
   [ ! -e "$npu_device" ] || args+=(--device "$npu_device" --group-add keep-groups)
 fi
+# NET=none for steps that only read local files (the probe reads an untrusted checkpoint).
 in_image() {
   podman run --rm --pull=never --read-only --tmpfs /tmp --cap-drop=all --security-opt no-new-privileges \
+    ${NET:+--network="$NET" -e HF_HUB_OFFLINE=1} \
     -e HF_HOME=/tmp/hf -e HF_HUB_OFFLINE=0 -e HF_HUB_DISABLE_TELEMETRY=1 -e HF_HUB_DISABLE_PROGRESS_BARS=1 \
     "${args[@]}" --entrypoint "$1" "$HALOGEN_IMAGE" "${@:2}"
 }
@@ -91,7 +93,7 @@ if [ "$rc" != 0 ]; then
   exit 1
 fi
 
-info="$(in_image /usr/local/bin/halogen-npu probe "/models/$rel" 2>&1)" || {
+info="$(NET=none in_image /usr/local/bin/halogen-npu probe "/models/$rel" 2>&1)" || {
   printf '%s\n' "$info" >&2
   echo "Halogen can't run this checkpoint on the NPU (above). Remove it with: sudo halogenctl model remove $name" >&2
   [ "${dir#"$models"/.pull/}" = "$dir" ] || { mkdir -p "$models/custom" && mv "$dir" "$models/custom/$name"; }
@@ -112,6 +114,6 @@ fi
 echo "$name is ready in $models/$kind/$name: a ${base:-checkpoint} for the NPU."
 echo "path=/models/$kind/$name"
 # shellcheck disable=SC2016 # awk program, not shell
-if in_image awk -v id="$base-fast" '$1 == "model" && $2 == id { found = 1 } END { exit !found }' /opt/halogen/npu/models.txt 2>/dev/null; then
+if NET=none in_image awk -v id="$base-fast" '$1 == "model" && $2 == id { found = 1 } END { exit !found }' /opt/halogen/npu/models.txt 2>/dev/null; then
   echo "fast=1"
 fi

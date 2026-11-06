@@ -14,13 +14,16 @@ on:
         type: boolean
         default: false
 
+# Each job gets only what it needs (below); this is the default for any other.
 permissions:
-  contents: write
-  packages: write
+  contents: read
 
 jobs:
   info:
     runs-on: ubuntu-24.04
+    # contents: write to push the release tag.
+    permissions:
+      contents: write
     outputs:
       tag: ${{ steps.info.outputs.tag }}
       image_tag: ${{ steps.info.outputs.image_tag }}
@@ -108,8 +111,10 @@ jobs:
           HALOS_RELEASE: ${{ needs.info.outputs.tag }}
         run: scripts/build.sh
       - name: Push
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u "${{ github.actor }}" --password-stdin
+          echo "$GH_TOKEN" | podman login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
           # Which channels to move is worked out now, with every tag pushed so far, so a release
           # made during this build counts. main's channel script is used, because a promoted
           # release's code may predate it. None for an old release run again.
@@ -124,7 +129,7 @@ jobs:
           suffix=""; [ "$HALOGEN_VARIANT" = npu ] || suffix="-no-npu"
           podman push "$image"
           git show origin/main:scripts/sign-image.sh > "$RUNNER_TEMP/sign-image.sh"
-          GITHUB_TOKEN="${{ secrets.GITHUB_TOKEN }}" bash "$RUNNER_TEMP/sign-image.sh" "$image"
+          GITHUB_TOKEN="$GH_TOKEN" bash "$RUNNER_TEMP/sign-image.sh" "$image"
           # One channel per call, which the push script of older code also accepts.
           refs=()
           for channel in $channels; do
@@ -138,6 +143,10 @@ jobs:
     needs: [info, image]
     runs-on: ubuntu-24.04
     timeout-minutes: 120
+    # packages: read to pull the image just pushed.
+    permissions:
+      contents: read
+      packages: read
     strategy:
       fail-fast: false
       matrix:
@@ -149,6 +158,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          persist-credentials: false
           ref: ${{ needs.info.outputs.tag }}
       - name: Free disk space
         run: sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc
@@ -160,8 +170,10 @@ jobs:
           if [ -e /etc/apparmor.d/usr.bin.swtpm ]; then sudo apparmor_parser -R /etc/apparmor.d/usr.bin.swtpm || true; fi
           sudo chmod 666 /dev/kvm
       - name: Pull the published image
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | sudo podman login ghcr.io -u "${{ github.actor }}" --password-stdin
+          echo "$GH_TOKEN" | sudo podman login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
           sudo podman pull "$(scripts/image-ref.sh)"
       - name: Build ISO
         run: sudo -E scripts/build-iso.sh
@@ -182,9 +194,13 @@ jobs:
   publish:
     needs: [info, iso]
     runs-on: ubuntu-24.04
+    # contents: write to create the GitHub release.
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v7
         with:
+          persist-credentials: false
           ref: ${{ needs.info.outputs.tag }}
       - uses: actions/download-artifact@v8
         with:

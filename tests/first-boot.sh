@@ -95,7 +95,11 @@ ok "second boot starts nothing and downloads nothing"
 echo 'HALOGEN_NPU_MODELS=embed' > "$work/config.env"
 "$work/fetch" >/dev/null
 grep -q ' run ' "$work/podman.log"
-ok "changing the model list triggers a fetch"
+# Halogen's verify reads local files only: no network, no capabilities. The download keeps its network.
+grep ' verify ' "$work/podman.log" | grep -q -- '--network=none --cap-drop=all --security-opt no-new-privileges' \
+  || { echo "verify ran with network or capabilities" >&2; exit 1; }
+if grep '/fetch.sh' "$work/podman.log" | grep -q -- '--network=none'; then echo "the download lost its network" >&2; exit 1; fi
+ok "changing the model list triggers a fetch, and verify runs offline with no capabilities"
 
 echo 'hf_secret123' > "$work/hf-token"; rm "$work/models/.fetch-stamp"; : > "$work/podman.log"
 "$work/fetch" > "$work/out" 2>&1 || { cat "$work/out" >&2; exit 1; }

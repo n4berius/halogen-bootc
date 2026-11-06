@@ -68,7 +68,7 @@ typed("timeout 180 sh -c 'until journalctl -o cat _SYSTEMD_USER_UNIT=halogen-fet
 time.sleep(5)
 typed("{ echo RESULT-START; cat /proc/cmdline; dmesg | grep -i secure; bootctl status | grep -i secure; "
       "bootc status | head -12; udevadm verify /usr/lib/udev/rules.d/70-halogen-devices.rules; "
-      "lsblk -f | grep -i crypto; "
+      "lsblk -f | grep -i crypto; sysctl kernel.dmesg_restrict kernel.kptr_restrict kernel.yama.ptrace_scope; sshd -T | grep -i x11forwarding; "
       "for d in $(lsblk -rno PATH,FSTYPE | awk '$2==\"crypto_LUKS\"{print $1}'); do cryptsetup luksDump $d | grep -i systemd-tpm2; done; vgs --noheadings -o vg_name; findmnt -rn -o TARGET,SOURCE -t xfs; sestatus | head -3; id halogen; loginctl show-user halogen -p Linger; "
       "systemctl status user@970.service --no-pager | head -4; journalctl --no-pager -n 8 -o cat _SYSTEMD_USER_UNIT=halogen-fetch.service; systemctl --failed --no-legend --no-pager; "
       "systemctl is-active firewalld halogen-prepare; halosctl version; ls /etc/ssh/sshd_config.d; sshd -T | grep -i permitrootlogin; journalctl -b -o cat -u bootc-fstab-edit; "
