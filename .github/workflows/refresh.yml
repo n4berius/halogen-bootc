@@ -15,6 +15,11 @@ jobs:
       fail-fast: false
       matrix:
         variant: [npu, no-npu]
+    # id-token: signing the rebuilt images with GitHub's identity (scripts/sign-image.sh).
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
     # Shared with release.yml's image job: one push moves an edition's channel tags at a time.
     concurrency:
       group: channel-tags-${{ matrix.variant }}
@@ -32,6 +37,7 @@ jobs:
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           # main's channel script, kept aside: the release checked out next may predate it.
           cp scripts/channels.sh "$RUNNER_TEMP/channels.sh"
+          cp scripts/sign-image.sh "$RUNNER_TEMP/sign-image.sh"
       - if: steps.stable.outputs.tag != ''
         env:
           TAG: ${{ steps.stable.outputs.tag }}
@@ -54,5 +60,17 @@ jobs:
           # The newest stable release always leads at least the stable channel.
           [ -n "$channels" ] || { echo "no channels for $TAG; nothing was pushed" >&2; exit 1; }
           echo "Moving the channels: $channels"
+          # Push the exact tag and sign it first (main's script, #46), so a channel never points
+          # to an unsigned image; the signature is per digest, so it covers the channel tags too.
+          image="$(scripts/image-ref.sh)"; base="${image%:*}"
+          suffix=""; [ "$HALOGEN_VARIANT" = npu ] || suffix="-no-npu"
+          podman push "$image"
+          GITHUB_TOKEN="${{ secrets.GITHUB_TOKEN }}" bash "$RUNNER_TEMP/sign-image.sh" "$image"
           # One channel per call, which the push script of older releases also accepts.
-          for channel in $channels; do scripts/push-image.sh "$channel"; done
+          refs=()
+          for channel in $channels; do
+            scripts/push-image.sh "$channel"
+            refs+=("$base:$channel$suffix")
+            [ "$channel" != stable ] || refs+=("$base:latest$suffix")
+          done
+          bash "$RUNNER_TEMP/sign-image.sh" --verify "${refs[@]}"

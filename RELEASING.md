@@ -64,6 +64,26 @@ new alpha and promote that, or tick **from main**.
 A promotion takes the newest *published* release one step down. Check on the Releases page that
 it is the one you mean before promoting, for example that the alpha you tested is there.
 
+## Signatures
+
+Every image the workflows push (edge, releases and the Monday rebuild) is signed with
+[cosign](https://docs.sigstore.dev/cosign/), keyless: GitHub vouches that this repository's
+`build.yml`, `release.yml` or `refresh.yml` made it, so there is no signing key to keep or leak
+(`scripts/sign-image.sh`). The job checks the signature right away and fails if it is missing.
+Sigstore's public transparency log records each signature: the repository, the workflow and the
+image digest, nothing else.
+
+To check an image yourself, with cosign installed:
+
+```bash
+cosign verify ghcr.io/n4berius/halos-flash:beta \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  --certificate-identity-regexp '^https://github\.com/n4berius/halos-flash/\.github/workflows/(build|release|refresh)\.yml@refs/(heads/main|tags/v.+)$'
+```
+
+Machines don't check signatures yet. That comes in a later release (#46), once every channel
+points to a signed image.
+
 ## Move to a new Halogen version
 
 Every morning, the **Halogen update** workflow looks for a newer

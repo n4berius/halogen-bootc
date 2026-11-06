@@ -78,6 +78,11 @@ jobs:
   image:
     needs: info
     runs-on: ubuntu-24.04
+    # id-token: signing the pushed images with GitHub's identity (scripts/sign-image.sh).
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
     # One release or weekly rebuild moves an edition's channel tags at a time, so a slower
     # build that finishes later can't move a channel back. Shared with refresh.yml.
     concurrency:
@@ -113,9 +118,21 @@ jobs:
           git tag -l 'v*' > "$RUNNER_TEMP/tags"
           channels="$(bash "$RUNNER_TEMP/channels.sh" "$TAG" "$RUNNER_TEMP/tags")"
           echo "Moving the channels: ${channels:-none, a newer release exists}"
+          # Push the exact tag and sign it first (main's script, #46), so a channel never points
+          # to an unsigned image; the signature is per digest, so it covers the channel tags too.
+          image="$(scripts/image-ref.sh)"; base="${image%:*}"
+          suffix=""; [ "$HALOGEN_VARIANT" = npu ] || suffix="-no-npu"
+          podman push "$image"
+          git show origin/main:scripts/sign-image.sh > "$RUNNER_TEMP/sign-image.sh"
+          GITHUB_TOKEN="${{ secrets.GITHUB_TOKEN }}" bash "$RUNNER_TEMP/sign-image.sh" "$image"
           # One channel per call, which the push script of older code also accepts.
-          if [ -z "$channels" ]; then podman push "$(scripts/image-ref.sh)"; fi
-          for channel in $channels; do scripts/push-image.sh "$channel"; done
+          refs=()
+          for channel in $channels; do
+            scripts/push-image.sh "$channel"
+            refs+=("$base:$channel$suffix")
+            [ "$channel" != stable ] || refs+=("$base:latest$suffix")
+          done
+          [ "${#refs[@]}" = 0 ] || bash "$RUNNER_TEMP/sign-image.sh" --verify "${refs[@]}"
 
   iso:
     needs: [info, image]
