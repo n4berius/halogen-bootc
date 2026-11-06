@@ -185,15 +185,35 @@ rm -rf "$work/models/npu" "$work/models/.fetch-stamp"
 if [ -e "$work/models/npu/lfm3-vl/lfm3-vl.hnpw" ]; then echo "another model's weights were fetched" >&2; exit 1; fi
 ok "a checkpoint whose model has no download of its own gets the programs it reuses"
 
-# The fetch container gets the NPU device on the NPU edition only. XRT comes with Halogen's image.
+# The fetch container gets no NPU device: Halogen's probe reads only the checkpoint's config
+# and tokenizer. XRT comes with Halogen's image, so none is mounted either.
 touch "$work/accel0"
 for variant in npu no-npu; do
   sed -i '/^HALOGEN_VARIANT=/d' "$work/release.env"; echo "HALOGEN_VARIANT=$variant" >> "$work/release.env"
   rm -f "$work/models/.fetch-stamp" "$work/last-run"
   HALOGEN_NPU_DEVICE="$work/accel0" "$work/fetch" > "$work/out" 2>&1 || { cat "$work/out" >&2; exit 1; }
   [ -s "$work/last-run" ] || { echo "no fetch container ran" >&2; exit 1; }
-  has=no; if grep -q -- "--device $work/accel0 --group-add keep-groups" "$work/last-run"; then has=yes; fi
-  [ "$has" = "$( [ "$variant" = npu ] && echo yes || echo no)" ] || { cat "$work/last-run" >&2; echo "$variant: NPU device passed=$has" >&2; exit 1; }
-  if grep -qi 'xilinx\|libxrt' "$work/last-run"; then echo "XRT was mounted" >&2; exit 1; fi
+  if grep -qi -- '--device\|xilinx\|libxrt' "$work/last-run"; then cat "$work/last-run" >&2; echo "$variant: a device or XRT reached the fetch" >&2; exit 1; fi
 done
-ok "the fetch passes the NPU device on the NPU edition only, and mounts no XRT"
+ok "the fetch container gets no NPU device and no XRT"
+
+# Your own Flash checkpoint is checked again after a Halogen update, before it is served.
+# shellcheck disable=SC2016 # expanded when the fake runs
+printf '#!/bin/bash\necho "flash-tool $*" >> "$FAKE/flash.log"\n' > "$work/flash-tool"; chmod +x "$work/flash-tool"
+mkdir -p "$work/models/flash/mine"; echo mine > "$work/flash-choice"
+export HALOGEN_FLASH_TOOL="$work/flash-tool" HALOGEN_FLASH_FILE="$work/flash-choice"
+printf 'repo=a/b\nverified=pass\nverified_with=9.9.9\n' > "$work/models/flash/mine/halos.info"
+"$work/fetch" > "$work/out" 2>&1 || { cat "$work/out" >&2; exit 1; }
+[ ! -e "$work/flash.log" ] || { echo "re-checked with the same Halogen" >&2; exit 1; }
+printf 'repo=a/b\nverified=pass\nverified_with=0.0.1\n' > "$work/models/flash/mine/halos.info"
+"$work/fetch" > "$work/out" 2>&1 || { cat "$work/out" >&2; exit 1; }
+grep -qx 'flash-tool verify mine' "$work/flash.log" || { echo "not re-checked after a Halogen update" >&2; exit 1; }
+ok "your own Flash checkpoint is checked again after a Halogen update"
+
+# What is fetched doesn't depend on the chosen checkpoint: the official vision tower stays.
+echo HALOGEN_VISION_TOWER >> "$work/allowed"; echo 'HALOGEN_VISION_TOWER=1' >> "$work/config.env"
+printf 'repo=a/b\ncheckpoint=model.hgn\nverified=pass\nverified_with=9.9.9\n' > "$work/models/flash/mine/halos.info"
+touch "$work/models/flash/mine/model.hgn"; rm -f "$work/models/.fetch-stamp" "$work/last-run"
+"$work/fetch" > "$work/out" 2>&1 || { cat "$work/out" >&2; exit 1; }
+grep -q -- '-e VISION=1 ' "$work/last-run" || { cat "$work/last-run" >&2; echo "choosing a checkpoint without a tower stopped the official one being fetched" >&2; exit 1; }
+ok "the official vision tower is fetched whichever checkpoint is chosen"

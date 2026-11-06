@@ -63,3 +63,6 @@ done
 sed -i 's/=npu/=no-npu/' "$work/release.env"
 if "$pull" LiquidAI/LFM3-1.7B > /dev/null 2>&1; then echo "the no-NPU edition pulled an NPU checkpoint" >&2; exit 1; fi
 ok "bad repos and names, and the no-NPU edition, are refused"
+if grep -q -- '--device' "$work/podman.log"; then echo "model pull gave a container the NPU device" >&2; exit 1; fi
+echo "ok: model pull's containers get no NPU device"
+

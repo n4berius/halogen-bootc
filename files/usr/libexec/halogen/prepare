@@ -14,6 +14,8 @@ as_halogen() { runuser -u halogen -- "$@"; }
 install -d -o halogen -g halogen -m 0750 "$models" "$configs" "$state"
 # shellcheck source=/dev/null
 . "${HALOGEN_RELEASE_FILE:-/usr/share/halogen/release.env}"
+# Your own Flash checkpoints (halogenctl flash pull), on both editions.
+as_halogen install -d -m 0750 "$models/flash"
 if [ "$HALOGEN_VARIANT" = npu ]; then
   # Halogen's NPU models, and folders for your own checkpoints (halogenctl model pull).
   as_halogen install -d -m 0750 "$models/npu" "$models/decider" "$models/LFM" "$models/custom"

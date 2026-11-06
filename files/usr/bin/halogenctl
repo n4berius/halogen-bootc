@@ -11,8 +11,45 @@ configs="${HALOGEN_CONFIGS_DIR:-/srv/configs}"
 follow=(); [ ! -t 1 ] || follow=(-f)
 lines="${2:-100}"
 
+models="${HALOGEN_MODELS_DIR:-/srv/models}"
+flash_choice="$configs/flash-checkpoint"
+official=qwen38-flash-next-v2.hgn
+# The Flash checkpoint halogenctl flash use chose: official, or a name under /srv/models/flash.
+chosen_flash() {
+  local c; c="$(as_owner head -n 1 "$flash_choice" 2>/dev/null | tr -cd 'A-Za-z0-9._-')" || true
+  echo "${c:-official}"
+}
+# Printable characters only: the fetch containers can write in /srv/models.
+# Which Flash checkpoint Halogen serves, as render-config decides it, and why it fell back to
+# the official one if it did. Prints the name (official or yours), then the reason, if any.
+served_flash() {
+  local out ck
+  out="$(systemd-run --machine=halogen@.host --user --pipe --wait --quiet /usr/libexec/halogen/render-config --show 2>&1)" || true
+  ck="$(sed -n 's/^HALOGEN_CHECKPOINT=//p' <<< "$out" | tail -n 1)"
+  case "$ck" in
+    /models/flash/*/*) ck="${ck#/models/flash/}"; echo "${ck%%/*}" ;;
+    /models/"$official"|'') echo official ;;
+    *) echo unknown ;;
+  esac
+  why="$(grep '^halogen-config: .*official one' <<< "$out" | tail -n 1 | sed 's/^halogen-config: //' | tr -cd '[:print:]' || true)"
+  echo "${why:-see sudo halogenctl config and sudo halogenctl logs}"
+}
+flash_info() { as_owner sed -n "s/^$2=//p" "$models/flash/$1/halos.info" 2>/dev/null | tail -n 1 | tr -cd '[:print:]' || true; }
+
 case "${1:-status}" in
-  status) unit --no-pager status halogen-fetch.service halogen.service || true ;;
+  status)
+    unit --no-pager status halogen-fetch.service halogen.service || true
+    c="$(chosen_flash)"
+    if [ "$c" != official ]; then
+      s="$(served_flash)"; served="$(head -n 1 <<< "$s")"
+      echo
+      if [ "$served" = "$c" ]; then
+        echo "Flash checkpoint: $c, your own ($(flash_info "$c" repo)). If Halogen won't start with it"
+        echo "(sudo halogenctl logs), go back to the official one: sudo halogenctl flash use official"
+      else
+        echo "Flash checkpoint: you chose $c, but Halogen serves the official one: $(sed -n 2p <<< "$s")"
+      fi
+    fi ;;
   start|stop|restart) unit "$1" halogen.service ;;
   logs) exec journalctl --no-pager "${follow[@]}" -n "$lines" _SYSTEMD_USER_UNIT=halogen.service + _SYSTEMD_USER_UNIT=halogen-fetch.service ;;
   fetch-logs) exec journalctl --no-pager "${follow[@]}" -n "$lines" _SYSTEMD_USER_UNIT=halogen-fetch.service ;;
@@ -78,9 +115,99 @@ case "${1:-status}" in
     printf '%s\n' "$value" | as_owner sh -c 'umask 077; cat > "$1.new" && mv -f "$1.new" "$1"' sh "$token"
     echo "Saved. The next download uses it: sudo halogenctl restart"
     ;;
+  flash)
+    # Your own Flash checkpoints under /srv/models/flash, beside the official one, which is
+    # always kept so going back needs no download.
+    as_halogen() { systemd-run --machine=halogen@.host --user --pipe --wait --quiet "$@"; }
+    valid() { case "$1" in [A-Za-z0-9]*) ;; *) return 1 ;; esac; case "$1" in *[!A-Za-z0-9._-]*) return 1 ;; esac; }
+    restart_now() {
+      # $1: what to say before asking. --yes skips the question.
+      if [ "$yes" != 1 ]; then
+        [ -t 0 ] || { echo "Nothing changed: add --yes to confirm without a terminal." >&2; exit 1; }
+        read -rp "$1 This restarts Halogen, which stops answering for a few minutes. Go ahead? [y/N] " answer
+        [ "$answer" = y ] || [ "$answer" = Y ] || { echo "Nothing changed."; exit 1; }
+      fi
+    }
+    yes=0; args=()
+    for a in "${@:2}"; do if [ "$a" = --yes ]; then yes=1; else args+=("$a"); fi; done
+    set -- flash "${args[@]}"
+    case "${2:-list}" in
+      pull)
+        shift 2
+        out="$(as_halogen /usr/libexec/halogen/flash-checkpoint pull "$@" | tee /dev/stderr)" || exit 1
+        name="$(sed -n 's/^name=//p' <<< "$out" | tail -n 1)"
+        valid "$name" || exit 1
+        echo
+        echo "To serve it: sudo halogenctl flash use $name"
+        ;;
+      verify)
+        valid "${3:-}" || { echo "usage: halogenctl flash verify <name>" >&2; exit 2; }
+        as_halogen /usr/libexec/halogen/flash-checkpoint verify "$3"
+        ;;
+      list)
+        c="$(chosen_flash)"; s="$(served_flash)"; served="$(head -n 1 <<< "$s")"
+        mark() { if [ "$1" = "$served" ]; then echo yes; else echo no; fi; }
+        printf '  %-24s %-8s %-7s %-22s %s\n' NAME SIZE ACTIVE VERIFIED SOURCE
+        size="$( { as_owner du -ch "$models/$official" "$models/qwen38-flash-next-ngram.hgn" 2>/dev/null || true; } | tail -n 1 | cut -f1)"
+        printf '  %-24s %-8s %-7s %-22s %s\n' official "${size:-?}" "$(mark official)" "at every start" \
+          "$(sed -n 's/^HALOGEN_WEIGHTS_REPO=//p' "${HALOGEN_RELEASE_FILE:-/usr/share/halogen/release.env}" 2>/dev/null)"
+        for dir in "$models"/flash/*/; do
+          [ -d "$dir" ] || continue
+          name="$(basename "$dir")"; valid "$name" || continue
+          case "$(flash_info "$name" verified)" in
+            pass) v="yes, with $(flash_info "$name" verified_with)" ;;
+            fail) v="FAILED" ;;
+            no) v="not yet" ;;
+            *) v="incomplete pull" ;;
+          esac
+          commit="$(flash_info "$name" commit)"
+          printf '  %-24s %-8s %-7s %-22s %s\n' "$name" "$( { as_owner du -sh "$dir" 2>/dev/null || true; } | cut -f1)" "$(mark "$name")" "$v" \
+            "$(flash_info "$name" repo)${commit:+ at ${commit:0:12}}"
+        done
+        echo
+        [ "$c" = "$served" ] || echo "You chose $c, but Halogen serves the official checkpoint: $(sed -n 2p <<< "$s")"
+        echo "ACTIVE: the checkpoint Halogen serves. Switch with: sudo halogenctl flash use <name>"
+        echo "Add one with: sudo halogenctl flash pull <Hugging Face repo>"
+        ;;
+      use)
+        name="${3:-}"
+        valid "$name" || { echo "usage: halogenctl flash use <name>|official [--yes]" >&2; exit 2; }
+        [ "$name" != "$(chosen_flash)" ] || { echo "$name is already the active checkpoint."; exit 0; }
+        if [ "$name" != official ]; then
+          [ -n "$(flash_info "$name" repo)" ] || { echo "No checkpoint called $name. See: sudo halogenctl flash list" >&2; exit 1; }
+          if [ "$(flash_info "$name" verified)" != pass ]; then
+            echo "$name has not passed Halogen's verify, so it can't be used. Check it: sudo halogenctl flash verify $name" >&2; exit 1
+          fi
+          echo "$name: $(flash_info "$name" checkpoint) from $(flash_info "$name" repo), commit $(flash_info "$name" commit | cut -c1-12)."
+          echo "halOS can't judge a checkpoint's answers. Compare them with the official model's before relying on it."
+        fi
+        restart_now "Switch Halogen to $name?"
+        # shellcheck disable=SC2016 # expanded by the halogen shell, from its arguments
+        printf '%s\n' "$name" | as_owner sh -c 'umask 027; cat > "$1.new" && mv -f "$1.new" "$1"' sh "$flash_choice"
+        unit restart halogen.service
+        echo "Switched to $name. Halogen is starting; follow it with: sudo halogenctl logs"
+        [ "$name" = official ] || echo "If it doesn't start, go back with: sudo halogenctl flash use official"
+        ;;
+      remove)
+        name="${3:-}"
+        valid "$name" || { echo "usage: halogenctl flash remove <name>" >&2; exit 2; }
+        [ "$name" != official ] || { echo "The official checkpoint is always kept, so going back needs no download." >&2; exit 1; }
+        dir="$models/flash/$name"
+        as_owner test -d "$dir" || { echo "No checkpoint called $name. See: sudo halogenctl flash list" >&2; exit 1; }
+        [ "$name" != "$(chosen_flash)" ] || { echo "$name is in use. Switch first: sudo halogenctl flash use official" >&2; exit 1; }
+        if [ "$yes" != 1 ]; then
+          [ -t 0 ] || { echo "Nothing changed: add --yes to confirm without a terminal." >&2; exit 1; }
+          read -rp "Delete $dir ($(as_owner du -sh "$dir" | cut -f1))? [y/N] " answer
+          [ "$answer" = y ] || [ "$answer" = Y ] || exit 0
+        fi
+        # As halogen: a folder link planted by a container must not let root delete through it.
+        as_owner rm -rf -- "$dir" && echo "Deleted $name."
+        ;;
+      *) echo "usage: halogenctl flash pull <hf-repo> [--revision <rev>] [--as <name>] [--file <checkpoint.hgn>] | list | use <name>|official [--yes] | verify <name> | remove <name> [--yes]" >&2; exit 2 ;;
+    esac
+    ;;
   model)
     # Your own NPU checkpoints under /srv/models/{decider,LFM,custom}.
-    models="${HALOGEN_MODELS_DIR:-/srv/models}"
     as_halogen() { systemd-run --machine=halogen@.host --user --pipe --wait --quiet "$@"; }
     in_use() { as_halogen /usr/libexec/halogen/render-config --show 2>/dev/null | grep '^HALOGEN_NPU_MODELS=' | tr '=,' '\n' | sed 's/:fast$//' | grep -qxF -- "$1"; }
     case "${2:-list}" in
@@ -162,5 +289,5 @@ case "${1:-status}" in
       *) echo "usage: halogenctl model pull <hf-repo> [--revision <rev>] [--as <name>] | list | remove <name>" >&2; exit 2 ;;
     esac
     ;;
-  *) echo "usage: halogenctl status|start|stop|restart|logs [lines]|fetch-logs [lines]|doctor|selftest|config|options [--new]|api-key|hf-token [--remove]|model pull|list|remove" >&2; exit 2 ;;
+  *) echo "usage: halogenctl status|start|stop|restart|logs [lines]|fetch-logs [lines]|doctor|selftest|config|options [--new]|api-key|hf-token [--remove]|model pull|list|remove|flash pull|list|use|verify|remove" >&2; exit 2 ;;
 esac

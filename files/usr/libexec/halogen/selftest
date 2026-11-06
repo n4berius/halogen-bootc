@@ -228,6 +228,28 @@ if [ "$npu" = 1 ]; then
       *) say FAIL "folder-$f" "$d has SELinux label $label, not container_file_t" ;; esac; fi
   done
 fi
+d="$models/flash"
+if [ ! -d "$d" ]; then say FAIL folder-flash "$d is missing"
+elif [ "$(stat -c %U "$d")" != halogen ]; then say FAIL folder-flash "$d belongs to $(stat -c %U "$d"), not halogen"
+else
+  label="$(stat -c %C "$d" 2>/dev/null)"
+  case "$label" in *container_file_t*|'') say PASS folder-flash "$d is ready for your own Flash checkpoints" ;;
+    *) say FAIL folder-flash "$d has SELinux label $label, not container_file_t" ;; esac
+fi
+# Which Flash checkpoint Halogen serves (halogenctl flash use), read as halogen like the rest.
+flash="$(as_owner head -n 1 "$configs/flash-checkpoint" | tr -cd 'A-Za-z0-9._-')"
+if [ -z "$flash" ] || [ "$flash" = official ]; then say INFO flash "serving the official Flash checkpoint"
+else
+  from="$(as_owner sed -n 's/^repo=//p' "$models/flash/$flash/halos.info" | tail -n 1 | tr -cd '[:print:]' | cut -c1-100)"
+  # What Halogen gets: render-config serves the official checkpoint if yours is missing or failed.
+  rendered="$(run systemd-run --machine=halogen@.host --user --pipe --wait --quiet /usr/libexec/halogen/render-config --show)"
+  why="$(printf '%s\n' "$rendered" | grep '^halogen-config: .*official one' | tail -n 1 | sed 's/^halogen-config: //' | tr -cd '[:print:]')"
+  if grep -q "^HALOGEN_CHECKPOINT=/models/flash/$flash/" <<< "$rendered"; then why=""
+  elif [ -z "$why" ]; then why="see sudo halogenctl config"; fi
+  if [ -n "$why" ]; then say WARN flash "you chose your own Flash checkpoint $flash, but Halogen serves the official one: $why"
+  elif [ "${running:-1}" = 1 ]; then say INFO flash "serving your own Flash checkpoint $flash${from:+ ($from)}"
+  else say WARN flash "your own Flash checkpoint $flash is chosen and Halogen is not running. If it refused it (sudo halogenctl logs), go back: sudo halogenctl flash use official"; fi
+fi
 meta="$models/.cache/huggingface/download/qwen38-flash-next-v2.hgn.metadata"
 # Read as halogen: the fetch container writes this folder, so a link there must not reach root's files.
 [ ! -r "$meta" ] || say INFO weights "downloaded from weights commit $(as_owner head -n 1 "$meta" | cut -c1-12); pinned: ${HALOGEN_WEIGHTS_REVISION:-unknown}"

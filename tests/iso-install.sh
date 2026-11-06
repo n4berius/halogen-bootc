@@ -93,6 +93,8 @@ selftest_has 'PASS kernel-amdgpu.gttsize:'
 selftest_has 'PASS kernel-iommu:'
 selftest_has 'PASS firewall:'
 selftest_has 'PASS prepare:'
+selftest_has 'PASS folder-flash:'
+selftest_has 'INFO flash: serving the official Flash checkpoint'
 if [ "$variant" = npu ]; then
   selftest_has 'PASS npu-folder:'
   for f in decider LFM custom; do selftest_has "PASS folder-$f:"; done

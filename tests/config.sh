@@ -4,6 +4,8 @@ set -euo pipefail
 repo="$(cd "$(dirname "$0")/.." && pwd)"
 work="$(mktemp -d)"; trap 'rm -rf "$work"' EXIT
 export XDG_RUNTIME_DIR="$work/run" HALOGEN_CONFIG_FILE="$work/config"
+export HALOGEN_FLASH_FILE="$work/flash-checkpoint" HALOGEN_MODELS_DIR="$work/models"
+official=HALOGEN_CHECKPOINT=/models/qwen38-flash-next-v2.hgn
 export HALOGEN_ALLOWED_FILE="$repo/variants/npu/usr/share/halogen/options.allowed"
 render="$repo/files/usr/libexec/halogen/render-config"
 cat > "$work/config" <<'S'
@@ -20,7 +22,7 @@ $(touch /tmp/halogen-config-injected)
 not a setting
 S
 out="$("$render" --show 2>"$work/log")"
-[ "$(printf '%s\n' "$out")" = "$(printf 'HALOGEN_KV_SLOTS=3\nHALOGEN_TEMPERATURE=1.0')" ] || { echo "unexpected: $out" >&2; exit 1; }
+[ "$(printf '%s\n' "$out")" = "$(printf '%s\nHALOGEN_KV_SLOTS=3\nHALOGEN_TEMPERATURE=1.0' "$official")" ] || { echo "unexpected: $out" >&2; exit 1; }
 for word in HALOGEN_API_PORT HALOGEN_DOWNLOAD HALOGEN_CHECKPOINT HALOGEN_KV_SLTOS HALOGEN_VISION_TOWER; do
   grep -q "ignored $word" "$work/log" || { echo "no warning for $word" >&2; exit 1; }
 done
@@ -29,9 +31,45 @@ echo "ok: only allowed settings pass, the last value wins, and the file never ru
 
 export HALOGEN_ALLOWED_FILE="$repo/variants/no-npu/usr/share/halogen/options.allowed"
 echo 'HALOGEN_NPU_MODELS=decider-0.8b' > "$work/config"
-[ -z "$("$render" --show 2>/dev/null)" ] || { echo "the no-NPU edition accepted NPU models" >&2; exit 1; }
+[ "$("$render" --show 2>/dev/null)" = "$official" ] || { echo "the no-NPU edition accepted NPU models" >&2; exit 1; }
 echo "ok: the no-NPU edition ignores NPU settings"
 
 rm "$work/config"
-[ -z "$("$render" --show 2>/dev/null)" ] || exit 1
+[ "$("$render" --show 2>/dev/null)" = "$official" ] || exit 1
 echo "ok: a missing config falls back to defaults"
+
+# The Flash checkpoint: only one flash pull downloaded and Halogen's verify passed.
+export HALOGEN_ALLOWED_FILE="$repo/variants/npu/usr/share/halogen/options.allowed"
+echo 'HALOGEN_VISION_TOWER=1' > "$work/config"
+ck() { "$render" --show 2>"$work/log" | sed -n 's/^HALOGEN_CHECKPOINT=//p'; }
+mkdir -p "$work/models/flash/mine/tokenizer"
+printf 'repo=a/b\ncheckpoint=model.hgn\nverified=pass\n' > "$work/models/flash/mine/halos.info"
+touch "$work/models/flash/mine/model.hgn"
+[ "$(ck)" = /models/qwen38-flash-next-v2.hgn ] || { echo "no choice did not mean official" >&2; exit 1; }
+echo official > "$work/flash-checkpoint"
+[ "$(ck)" = /models/qwen38-flash-next-v2.hgn ] || exit 1
+echo mine > "$work/flash-checkpoint"
+[ "$(ck)" = /models/flash/mine/model.hgn ] || { echo "the chosen checkpoint was not used" >&2; exit 1; }
+if "$render" --show 2>/dev/null | grep -q '^HALOGEN_VISION_TOWER='; then echo "vision on with no tower beside the checkpoint" >&2; exit 1; fi
+grep -q 'ignored HALOGEN_VISION_TOWER' "$work/log" || exit 1
+touch "$work/models/flash/mine/qwen38-flash-next-vision.hgn"
+"$render" --show 2>/dev/null | grep -qx 'HALOGEN_VISION_TOWER=1' || { echo "vision dropped though the tower is there" >&2; exit 1; }
+sed -i 's/^verified=pass$/verified=fail/' "$work/models/flash/mine/halos.info"
+if [ "$(ck)" != /models/qwen38-flash-next-v2.hgn ] || ! grep -q "not passed Halogen's verify" "$work/log"; then
+  echo "an unverified checkpoint was used" >&2; exit 1
+fi
+sed -i 's/^verified=fail$/verified=pass/; s/^checkpoint=.*/checkpoint=..\/..\/x.hgn/' "$work/models/flash/mine/halos.info"
+[ "$(ck)" = /models/qwen38-flash-next-v2.hgn ] || { echo "a checkpoint path outside its folder was used" >&2; exit 1; }
+for bad in ../mine missing '.hidden' 'a b'; do
+  printf '%s\n' "$bad" > "$work/flash-checkpoint"
+  [ "$(ck)" = /models/qwen38-flash-next-v2.hgn ] || { echo "'$bad' did not fall back to the official checkpoint" >&2; exit 1; }
+done
+echo "ok: the Flash checkpoint is the official one unless a verified one is chosen; vision follows its tower"
+
+# A link in a checkpoint folder could lead to a file that changed after it was checked.
+mkdir -p "$work/models/flash/linked"; printf 'checkpoint=model.hgn\nverified=pass\n' > "$work/models/flash/linked/halos.info"
+ln -s /etc/hostname "$work/models/flash/linked/model.hgn"; echo linked > "$work/flash-checkpoint"
+[ "$(ck)" = /models/qwen38-flash-next-v2.hgn ] || { echo "a linked checkpoint was used" >&2; exit 1; }
+grep -q 'holds links' "$work/log" || exit 1
+echo "ok: a checkpoint folder holding links falls back to the official checkpoint"
+

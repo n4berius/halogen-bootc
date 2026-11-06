@@ -40,7 +40,7 @@ recommendations.
   `/etc/subgid`, the file capabilities on `newuidmap`/`newgidmap`, and linger.
 - `container_file_t` labels on `/srv/models` and `/srv/configs`, and the
   writable own-checkpoint folders (`/srv/models/decider`, `LFM`, `custom`), where Halogen keeps
-  its NPU conversions.
+  its NPU conversions, and `/srv/models/flash` for your own Flash checkpoints.
 - Network access during the fetch step (`halogen-fetch`), which downloads about 130 GB.
 - `rd.luks.options=tpm2-device=auto` and the PCR 7 TPM binding in `halogen-enroll-tpm`.
 
@@ -56,7 +56,9 @@ recommendations.
 
 - The Quadlet (`files/etc/containers/systemd/users/970/`, `variants/npu/.../10-npu.conf`):
   read-only mounts, capabilities, `no-new-privileges`, published ports and addresses.
-- The fetch and pull containers (`files/usr/libexec/halogen/fetch-models`, `model-pull`):
+- The fetch and pull containers (`files/usr/libexec/halogen/fetch-models`, `model-pull`,
+  `flash-checkpoint`), and how `render-config` turns `/srv/configs/flash-checkpoint` into
+  `HALOGEN_CHECKPOINT`:
   capabilities, read-only root, what is writable, how the HF token is passed.
 - `prepare`, tmpfiles and sysusers: owners and modes of `/srv/configs`, the API key, the HF
   token, `/var/lib/halogen`.

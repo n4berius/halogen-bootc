@@ -11,11 +11,14 @@ needed_gib="${HALOGEN_MODELS_NEEDED_GIB:-125}"
 max_wait="${HALOGEN_RETRY_MAX_S:-300}"
 progress_s="${HALOGEN_PROGRESS_S:-60}"
 hf_token="${HALOGEN_HF_TOKEN_FILE:-/srv/configs/hf-token}"
-npu_device="${HALOGEN_NPU_DEVICE:-/dev/accel/accel0}"
 
 # shellcheck disable=SC1090
 . "$release"
-effective="$("$render")" || exit 1
+flash_tool="${HALOGEN_FLASH_TOOL:-/usr/libexec/halogen/flash-checkpoint}"
+flash_choice="${HALOGEN_FLASH_FILE:-/srv/configs/flash-checkpoint}"
+# The settings for the official checkpoint: what is fetched doesn't depend on which checkpoint
+# is chosen (the official vision tower stays, so going back downloads nothing).
+effective="$(HALOGEN_FLASH_FILE=/dev/null "$render")" || exit 1
 setting() { sed -n "s/^$1=//p" "$effective" | tail -n 1; }
 npu_models="$(setting HALOGEN_NPU_MODELS)"
 # The agent guard adds its two models when the server starts, so fetch them now: the server
@@ -63,12 +66,26 @@ until podman image exists "$HALOGEN_IMAGE"; do
   wait_s=$((wait_s * 2)); [ "$wait_s" -le "$max_wait" ] || wait_s="$max_wait"
 done
 
+# Your own Flash checkpoint was checked by the Halogen it was pulled with. After a Halogen
+# update, check it again with this one before it is served; if it fails, render-config serves
+# the official checkpoint and halogenctl status says why.
+choice="$(head -n 1 "$flash_choice" 2>/dev/null | tr -cd 'A-Za-z0-9._-')"
+case "$choice" in ''|official|[!A-Za-z0-9]*) ;; *)
+  info="$models/flash/$choice/halos.info"
+  if [ -f "$info" ] && [ "$(sed -n 's/^verified=//p' "$info" | tail -n 1)" = pass ] &&
+     [ "$(sed -n 's/^verified_with=//p' "$info" | tail -n 1)" != "$HALOGEN_VERSION" ]; then
+    echo "halogen-fetch: checking your Flash checkpoint $choice again with Halogen $HALOGEN_VERSION"
+    "$flash_tool" verify "$choice" || echo "halogen-fetch: $choice failed the check, so Halogen serves the official checkpoint. Check it again: sudo halogenctl flash verify $choice" >&2
+  fi ;;
+esac
+
 if [ "$(cat "$stamp" 2>/dev/null)" = "$want" ]; then
   echo "halogen-fetch: models already match this release"
   exit 0
 fi
 
-have_gib="$(du -s --block-size=1G "$models" 2>/dev/null | cut -f1)"
+# Your own Flash checkpoints don't count as room for this release's models.
+have_gib="$(du -s --block-size=1G --exclude="$models/flash" "$models" 2>/dev/null | cut -f1)"
 free_gib="$(df --output=avail --block-size=1G "$models" | tail -n 1 | tr -d ' ')"
 if [ "$((${free_gib:-0} + ${have_gib:-0}))" -lt "$needed_gib" ]; then
   echo "halogen-fetch: ${free_gib:-0} GiB free in $models; the models need about $needed_gib GiB" >&2
@@ -79,7 +96,7 @@ fi
 # (partial files included) every minute. 0 turns the report off.
 if [ "$progress_s" -gt 0 ]; then
   while sleep "$progress_s" > /dev/null 2>&1; do
-    echo "halogen-fetch: $(du -s --block-size=1G "$models" 2>/dev/null | cut -f1) GiB of about $needed_gib GiB downloaded"
+    echo "halogen-fetch: $(du -s --block-size=1G --exclude="$models/flash" "$models" 2>/dev/null | cut -f1) GiB of about $needed_gib GiB downloaded"
   done &
   reporter=$!
   trap 'kill "$reporter" 2>/dev/null' EXIT
@@ -95,12 +112,6 @@ else
   echo "halogen-fetch: no Hugging Face token; downloads are anonymous. Add one with: sudo halogenctl hf-token"
 fi
 
-# On the NPU edition, Halogen's NPU tool reads your own checkpoints. Give it what the server
-# has: the NPU device and the groups that may open it. XRT comes with Halogen's image.
-npu_args=()
-if [ "${HALOGEN_VARIANT:-}" = npu ] && [ -e "$npu_device" ]; then
-  npu_args+=(--device "$npu_device" --group-add keep-groups)
-fi
 
 wait_s=15
 while :; do
@@ -109,7 +120,7 @@ while :; do
     -e HF_HOME=/tmp/hf -e HF_HUB_OFFLINE=0 -e HF_HUB_DISABLE_TELEMETRY=1 -e HF_HUB_DISABLE_PROGRESS_BARS=1 \
     -e "WEIGHTS_REPO=$HALOGEN_WEIGHTS_REPO" -e "WEIGHTS_REVISION=$HALOGEN_WEIGHTS_REVISION" \
     -e "NPU_MODELS=$npu_models" -e "VISION=$vision" "${token_args[@]}" \
-    -v "$models:/models" -v "$helper:/fetch.sh:ro" "${npu_args[@]}" \
+    -v "$models:/models" -v "$helper:/fetch.sh:ro" \
     "$HALOGEN_IMAGE" /fetch.sh
   rc=$?
   case "$rc" in

@@ -110,3 +110,52 @@ printf '#!/bin/bash\nexit 1\n' > "$work/bin/systemd-run"
 HALOGEN_MODELS_DIR="$work/models" "$ctl" model list > "$work/out" 2>&1 || { cat "$work/out" >&2; echo "model list failed with no npu folder" >&2; exit 1; }
 grep -q '^  None downloaded yet\.' "$work/out" || { cat "$work/out" >&2; echo "no 'None downloaded yet'" >&2; exit 1; }
 ok "model list still works with no NPU folder and no readable settings"
+
+# flash: your own Flash checkpoints beside the official one, switched only to verified ones.
+f systemd-run 'case "$*" in
+  *render-config*) c="$(cat "$FAKE/configs/flash-checkpoint" 2>/dev/null)"
+    if [ -n "${FAKE_FALLBACK:-}" ] || [ -z "$c" ] || [ "$c" = official ]; then
+      [ -z "${FAKE_FALLBACK:-}" ] || echo "halogen-config: $c has not passed Halogens verify; using the official one" >&2
+      echo HALOGEN_CHECKPOINT=/models/qwen38-flash-next-v2.hgn
+    else echo "HALOGEN_CHECKPOINT=/models/flash/$c/model.hgn"; fi ;;
+  *flash-checkpoint*pull*) echo "Downloading..."; echo "name=mine" ;;
+  *flash-checkpoint*verify*) echo "verify $*" >> "$FAKE/log" ;;
+esac'
+fm="$work/fmodels"; mkdir -p "$fm/flash/mine" "$fm/flash/broken" "$fm/flash/partial"
+printf 'repo=someone/Mine-HGN\ncommit=0123456789abcdef\ncheckpoint=model.hgn\nverified=pass\nverified_with=0.19.1\n' > "$fm/flash/mine/halos.info"
+printf 'repo=someone/Broken\033]0;owned\007\ncheckpoint=model.hgn\nverified=fail\n' > "$fm/flash/broken/halos.info"
+export HALOGEN_MODELS_DIR="$fm"
+"$ctl" flash list > "$work/out"
+if ! grep -qE '^  official +\S+ +yes ' "$work/out" || ! grep -qE '^  mine +\S+ +no +yes, with 0.19.1 +someone/Mine-HGN at 0123456789ab$' "$work/out" ||
+   ! grep -qE '^  broken .* FAILED ' "$work/out" || ! grep -qE '^  partial .* incomplete pull' "$work/out" || ! grep -q '^ACTIVE' "$work/out"; then cat "$work/out" >&2; echo "flash list is wrong" >&2; exit 1; fi
+if grep -q $'\033' "$work/out"; then echo "flash list printed a terminal escape from halos.info" >&2; exit 1; fi
+if "$ctl" flash use mine < /dev/null > "$work/out" 2>&1; then echo "use switched without asking" >&2; exit 1; fi
+[ ! -e "$work/configs/flash-checkpoint" ] || { echo "a declined switch changed the setting" >&2; exit 1; }
+if "$ctl" flash use broken --yes > "$work/out" 2>&1; then echo "a checkpoint that failed verify was used" >&2; exit 1; fi
+if "$ctl" flash use nothing --yes > "$work/out" 2>&1; then echo "a missing checkpoint was used" >&2; exit 1; fi
+if "$ctl" flash use ../mine --yes > "$work/out" 2>&1; then echo "a path was accepted as a name" >&2; exit 1; fi
+: > "$work/log"
+"$ctl" flash use mine --yes > "$work/out" 2>&1 || { cat "$work/out" >&2; exit 1; }
+if [ "$(cat "$work/configs/flash-checkpoint")" != mine ] || ! grep -q 'runuser -u halogen -- sh -c' "$work/log" ||
+   ! grep -q 'systemctl --user --machine=halogen@.host restart halogen.service' "$work/log"; then
+  echo "use did not write the choice as halogen and restart" >&2; exit 1
+fi
+"$ctl" flash list > "$work/out"; grep -qE '^  mine +\S+ +yes ' "$work/out" || { echo "list doesn't show the active one" >&2; exit 1; }
+"$ctl" status > "$work/out" 2>/dev/null; grep -q 'flash use official' "$work/out" || { echo "status doesn't say how to go back" >&2; exit 1; }
+FAKE_FALLBACK=1 "$ctl" flash list > "$work/out"
+if ! grep -qE '^  official +\S+ +yes ' "$work/out" || ! grep -q 'You chose mine, but Halogen serves the official checkpoint: mine has not passed' "$work/out"; then
+  cat "$work/out" >&2; echo "list hides that Halogen fell back to official" >&2; exit 1
+fi
+FAKE_FALLBACK=1 "$ctl" status > "$work/out" 2>/dev/null
+grep -q 'you chose mine, but Halogen serves the official one' "$work/out" || { echo "status hides the fallback" >&2; exit 1; }
+if "$ctl" flash remove mine --yes > "$work/out" 2>&1; then echo "the active checkpoint was removed" >&2; exit 1; fi
+if "$ctl" flash remove official --yes > "$work/out" 2>&1; then echo "official was removable" >&2; exit 1; fi
+"$ctl" flash remove broken --yes > /dev/null
+if [ -e "$fm/flash/broken" ] || ! grep -q "runuser -u halogen -- rm -rf -- $fm/flash/broken" "$work/log"; then
+  echo "remove didn't delete as halogen" >&2; exit 1
+fi
+"$ctl" flash use official --yes > /dev/null
+[ "$(cat "$work/configs/flash-checkpoint")" = official ] || exit 1
+"$ctl" flash pull someone/Mine-HGN --as mine > "$work/out" 2>/dev/null; grep -q 'sudo halogenctl flash use mine' "$work/out" || { echo "pull doesn't say how to use it" >&2; exit 1; }
+"$ctl" flash verify mine > /dev/null; grep -q 'verify mine' "$work/log" || exit 1
+ok "flash lists, switches only to verified checkpoints after asking, never removes the active or official one, all as halogen"
