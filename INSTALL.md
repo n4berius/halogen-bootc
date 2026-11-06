@@ -271,7 +271,7 @@ sudo halogenctl flash pull someone/Some-Flash-HGN --revision <commit> --as mine
 sudo halogenctl flash list               # official and yours: size, which is active, verified
 sudo halogenctl flash use mine           # switch; asks first, then restarts Halogen
 sudo halogenctl flash use official       # back to the official checkpoint
-sudo halogenctl flash verify mine        # run Halogen's verify again, after a Halogen update
+sudo halogenctl flash verify mine        # check it again (done for you after a Halogen update)
 sudo halogenctl flash remove mine
 ```
 
@@ -283,17 +283,25 @@ What `flash pull` does:
 - **Only what Halogen loads.** That's the `.hgn` checkpoint, its quality sidecar if it has
   one, the vision tower, and `tokenizer/`. The lookup table (`qwen38-flash-next-ngram.hgn`,
   about 48 GB) is fetched only when the checkpoint doesn't carry its own; Halogen's server
-  says which. Nothing else in the repository is downloaded, so there's no Python pickle or
+  says which. If it is the very same file as the official one, that file is shared instead,
+  using no extra disk. Nothing else in the repository is downloaded, so there's no Python pickle or
   script to run.
 - **Several checkpoints.** If the repository holds more than one `.hgn` checkpoint, choose one
   with `--file <name>.hgn`.
 - **No tokenizer.** If the repository has none, it copies in the official tokenizer.
 - **Room first.** It checks the free space before the first byte. A custom checkpoint
   typically needs 60 to 110 GB, on top of the official model's 110 GB.
-- **Checked twice.** Every file must match the hash Hugging Face lists for it, and must pass
-  Halogen's own [`verify`](https://github.com/peonist-ai/halogen-flash-server/blob/main/docs/checkpoint-tools.md).
-  `flash use` refuses a checkpoint that failed or wasn't checked.
-- **Resumes.** An interrupted download resumes when you run the same command again.
+- **Checked twice.** Every file must match the hash Hugging Face lists for it, and the
+  checkpoint must pass Halogen's own
+  [`verify`](https://github.com/peonist-ai/halogen-flash-server/blob/main/docs/checkpoint-tools.md).
+  `flash use` refuses a checkpoint that failed or wasn't checked. After a Halogen update, the
+  next start checks the chosen checkpoint again with the new Halogen; if it fails, Halogen
+  serves the official checkpoint and `flash list` and `status` say why.
+- **Updates in place.** Pulling the same name again moves it to the repository's new commit and
+  removes files the new commit no longer has. It won't replace the checkpoint Halogen is
+  serving: switch to the official one first.
+- **Resumes.** An interrupted download resumes when you run the same command again. A pull can
+  take hours, so over SSH run it inside `tmux`, which keeps it going if the connection drops.
 - **Your token.** It uses your Hugging Face token if you saved one; gated and private
   repositories need it.
 
@@ -308,6 +316,9 @@ Things to know:
   doesn't work ([`HALOGEN_TEMPLATE_UNCHECKED`](https://github.com/peonist-ai/halogen-flash-server/blob/main/docs/FLAGS.md))
   or it needs more memory than is free. `sudo halogenctl status` and the selftest then say so,
   and `sudo halogenctl flash use official` brings the official model back.
+- **The selftest and `flash list` show what Halogen serves.** If your choice is missing or
+  failed a check, Halogen quietly serves the official checkpoint so it still starts; both then
+  say so, and why.
 - **Images.** With `HALOGEN_VISION_TOWER=1`, images work only if the checkpoint's repository
   has a vision tower (`qwen38-flash-next-vision.hgn`). Without one, images stay off and
   `halogenctl config` says why.

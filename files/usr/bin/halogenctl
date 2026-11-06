@@ -20,6 +20,19 @@ chosen_flash() {
   echo "${c:-official}"
 }
 # Printable characters only: the fetch containers can write in /srv/models.
+# Which Flash checkpoint Halogen serves, as render-config decides it, and why it fell back to
+# the official one if it did. Prints the name (official or yours), then the reason, if any.
+served_flash() {
+  local out ck
+  out="$(systemd-run --machine=halogen@.host --user --pipe --wait --quiet /usr/libexec/halogen/render-config --show 2>&1)" || true
+  ck="$(sed -n 's/^HALOGEN_CHECKPOINT=//p' <<< "$out" | tail -n 1)"
+  case "$ck" in
+    /models/flash/*/*) ck="${ck#/models/flash/}"; echo "${ck%%/*}" ;;
+    /models/"$official"|'') echo official ;;
+    *) echo unknown ;;
+  esac
+  grep '^halogen-config: .*official one' <<< "$out" | tail -n 1 | sed 's/^halogen-config: //' | tr -cd '[:print:]' || true
+}
 flash_info() { as_owner sed -n "s/^$2=//p" "$models/flash/$1/halos.info" 2>/dev/null | tail -n 1 | tr -cd '[:print:]'; }
 
 case "${1:-status}" in
@@ -27,9 +40,14 @@ case "${1:-status}" in
     unit --no-pager status halogen-fetch.service halogen.service || true
     c="$(chosen_flash)"
     if [ "$c" != official ]; then
+      s="$(served_flash)"; served="$(head -n 1 <<< "$s")"
       echo
-      echo "Flash checkpoint: $c, your own ($(flash_info "$c" repo)). If Halogen won't start with it"
-      echo "(sudo halogenctl logs), go back to the official one: sudo halogenctl flash use official"
+      if [ "$served" = "$c" ]; then
+        echo "Flash checkpoint: $c, your own ($(flash_info "$c" repo)). If Halogen won't start with it"
+        echo "(sudo halogenctl logs), go back to the official one: sudo halogenctl flash use official"
+      else
+        echo "Flash checkpoint: you chose $c, but Halogen serves the official one: $(sed -n 2p <<< "$s")"
+      fi
     fi ;;
   start|stop|restart) unit "$1" halogen.service ;;
   logs) exec journalctl --no-pager "${follow[@]}" -n "$lines" _SYSTEMD_USER_UNIT=halogen.service + _SYSTEMD_USER_UNIT=halogen-fetch.service ;;
@@ -126,8 +144,8 @@ case "${1:-status}" in
         as_halogen /usr/libexec/halogen/flash-checkpoint verify "$3"
         ;;
       list)
-        c="$(chosen_flash)"
-        mark() { if [ "$1" = "$c" ]; then echo yes; else echo no; fi; }
+        c="$(chosen_flash)"; s="$(served_flash)"; served="$(head -n 1 <<< "$s")"
+        mark() { if [ "$1" = "$served" ]; then echo yes; else echo no; fi; }
         printf '  %-24s %-8s %-7s %-22s %s\n' NAME SIZE ACTIVE VERIFIED SOURCE
         size="$( { as_owner du -ch "$models/$official" "$models/qwen38-flash-next-ngram.hgn" 2>/dev/null || true; } | tail -n 1 | cut -f1)"
         printf '  %-24s %-8s %-7s %-22s %s\n' official "${size:-?}" "$(mark official)" "at every start" \
@@ -146,6 +164,7 @@ case "${1:-status}" in
             "$(flash_info "$name" repo)${commit:+ at ${commit:0:12}}"
         done
         echo
+        [ "$c" = "$served" ] || echo "You chose $c, but Halogen serves the official checkpoint: $(sed -n 2p <<< "$s")"
         echo "ACTIVE: the checkpoint Halogen serves. Switch with: sudo halogenctl flash use <name>"
         echo "Add one with: sudo halogenctl flash pull <Hugging Face repo>"
         ;;

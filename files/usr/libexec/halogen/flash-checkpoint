@@ -26,17 +26,20 @@ podman image exists "$HALOGEN_IMAGE" \
 
 token_args=()
 [ ! -s "$hf_token" ] || token_args=(-v "$hf_token:/run/secrets/hf-token:ro" -e HF_TOKEN_PATH=/run/secrets/hf-token)
-# Online, for listing and downloading: no capabilities, writes only into the models folder.
+# Online, for listing and downloading: no capabilities, a read-only image, and only the mounts
+# in $mounts (none for the listing, the checkpoint's own folder for the download).
+mounts=()
 online() {
   podman run --rm -i --pull=never --read-only --tmpfs /tmp --cap-drop=all --security-opt no-new-privileges \
     -e HF_HOME=/tmp/hf -e HF_HUB_OFFLINE=0 -e HF_HUB_DISABLE_TELEMETRY=1 -e HF_HUB_DISABLE_PROGRESS_BARS=1 \
-    "${token_args[@]}" -v "$models:/models" --entrypoint "$1" "$HALOGEN_IMAGE" "${@:2}"
+    "${token_args[@]}" "${mounts[@]}" --entrypoint "$1" "$HALOGEN_IMAGE" "${@:2}"
 }
-# Halogen's own tools on a downloaded file: read-only, offline, no capabilities, and the same
-# devices the fetch gives verify.
+# Halogen's own tools on a downloaded file: offline, no capabilities, a read-only image and
+# models, and the GPU devices the fetch gives verify. Not --ipc=host: unlike the server they
+# share nothing with another process, so they get none of the running server's shared memory.
 offline() {
-  podman run --rm --pull=never --device /dev/kfd --device /dev/dri --group-add keep-groups \
-    --ipc=host --ulimit memlock=-1:-1 -v "$models:/models:ro" \
+  podman run --rm --pull=never --read-only --tmpfs /tmp --device /dev/kfd --device /dev/dri --group-add keep-groups \
+    --ulimit memlock=-1:-1 -v "$models:/models:ro" \
     --network=none --cap-drop=all --security-opt no-new-privileges "$@"
 }
 info_get() { sed -n "s/^$2=//p" "$1" 2>/dev/null | tail -n 1; }
@@ -49,6 +52,9 @@ verify_dir() {
   for f in "$dir"/*.hgn; do
     [ -e "$f" ] || [ -L "$f" ] || continue
     if [ -L "$f" ] || [ ! -f "$f" ]; then echo "$(basename "$f") is not a plain file." >&2; result=fail; continue; fi
+    # Halogen's verify takes the checkpoint and its sidecars, not the lookup table, which the
+    # pull checks against the repository's hash instead (as the fetch does for the official one).
+    [ "$(basename "$f")" != "$table" ] || continue
     checked=$((checked + 1))
     echo "Checking $(basename "$f") with Halogen's verify..."
     if ! offline "$HALOGEN_IMAGE" verify "/models/flash/$name/$(basename "$f")"; then result=fail; fi
@@ -141,7 +147,7 @@ if [ -n "$want_file" ]; then
   checkpoint="$want_file"
 else
   case "$(grep -c . <<< "$candidates")" in
-    0) if cut -f1 <<< "$files" | grep -qi '\.gguf$'; then
+    0) if grep -qiE '^[^[:space:]]+\.gguf[[:space:]]' <<< "$files"; then
          die "$repo holds GGUF files, not a Halogen .hgn checkpoint. halogenctl can't pull a GGUF yet."
        fi
        die "$repo has no Halogen .hgn checkpoint in its top folder." ;;
@@ -173,6 +179,7 @@ if [ "$(head -n 1 "$flash_choice" 2>/dev/null | tr -d '[:space:]')" = "$name" ];
   die "$name is the checkpoint Halogen serves. Switch first (sudo halogenctl flash use official), then pull it again."
 fi
 mkdir -p "$dir" || exit 1
+mounts=(-v "$dir:/models/flash/$name")
 # From the first byte until the checks pass, the folder counts as unchecked.
 if [ -f "$info" ]; then
   { grep -v -e '^verified' "$info"; echo "verified=no"; } > "$info.new" && mv -f "$info.new" "$info" || exit 1
@@ -199,8 +206,17 @@ own_table="$(awk '{ print $2 }' <<< "$facts")"
 if [ "$own_table" = 1 ]; then
   echo "The checkpoint carries its own lookup table."
 elif has "$table"; then
-  echo "Downloading its lookup table, $table ($(gib "$(size_of "$table")"))."
-  fetch "$table"; wanted+=("$table")
+  # Many builds of the same model share the official table. Then the same file is linked in
+  # (a hard link: no extra disk, and Halogen sees a plain file), not downloaded again.
+  if [ "$(stat -c %s "$models/$table" 2>/dev/null)" = "$(size_of "$table")" ] && [ ! -e "$dir/$table" ] &&
+     [ "$(sha256sum "$models/$table" | cut -d' ' -f1)" = "$(sha_of "$table")" ]; then
+    ln "$models/$table" "$dir/$table" && echo "Its lookup table is the official one, so that file is shared rather than downloaded."
+  fi
+  if [ ! -e "$dir/$table" ]; then
+    echo "Downloading its lookup table, $table ($(gib "$(size_of "$table")"))."
+    fetch "$table"
+  fi
+  wanted+=("$table")
 elif [ "$own_table" = 0 ]; then
   die "$checkpoint needs a lookup table ($table) beside it, and $repo has none. It can't run."
 else
@@ -218,6 +234,21 @@ for f in "${wanted[@]}"; do
   else die "$repo lists no hash for $f, so it can't be checked."; fi
   [ "$got" = "$s" ] || die "$f does not match $repo's hash. Pull again to download it afresh."
 done
+
+# Files from an earlier pull that this commit doesn't have would still be loaded (an old
+# quality sidecar beside a new checkpoint), so they go.
+for f in "$dir"/*.hgn; do
+  [ -e "$f" ] || [ -L "$f" ] || continue
+  keep=0; for w in "${wanted[@]}"; do [ "$w" != "$(basename "$f")" ] || keep=1; done
+  [ "$keep" = 1 ] || { echo "Removing $(basename "$f") from an earlier pull."; rm -f -- "$f"; }
+done
+if [ "${#tokenizer[@]}" -gt 0 ]; then
+  for f in "$dir"/tokenizer/* "$dir"/tokenizer/.[!.]*; do
+    [ -e "$f" ] || [ -L "$f" ] || continue
+    keep=0; for w in "${tokenizer[@]}"; do [ "$w" != "tokenizer/$(basename "$f")" ] || keep=1; done
+    [ "$keep" = 1 ] || rm -rf -- "$f"
+  done
+fi
 
 # Halogen finds tokenizer/ beside the checkpoint. A repository without one gets the official
 # tokenizer, copied rather than linked; Halogen checks its chat template at start.

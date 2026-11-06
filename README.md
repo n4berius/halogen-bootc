@@ -79,7 +79,7 @@ download the models.
 | Location | Contents | Changes through |
 |---|---|---|
 | OS image | Kernel arguments, services, firewall, Halogen digest | Rebuild and `bootc upgrade` |
-| `/srv/configs` | `halogen.env` (yours), `halogen.env.example` (every option, refreshed each boot), `api-key`, `flash-checkpoint` (which Flash checkpoint is served) | Edit `halogen.env` on the machine |
+| `/srv/configs` | `halogen.env` (yours), `halogen.env.example` (every option, refreshed each boot), `api-key`, `flash-checkpoint` (which Flash checkpoint is served) | Edit `halogen.env`; `sudo halogenctl flash use` for `flash-checkpoint` |
 | `/usr/share/halogen` | Locked settings and the allowed-option list | Rebuild only, read-only |
 | `/srv/models` | Flash weights and NPU models, about 125 GB, on their own volume | Fetched on first boot |
 | `/srv/models/flash` | Your own Flash checkpoints, about 60 to 110 GB each | `sudo halogenctl flash pull` ([how](INSTALL.md#your-own-flash-checkpoint)) |
@@ -228,8 +228,8 @@ the single folder (the 0.18.23 releases and earlier) downloads all its NPU model
 - **The official Flash checkpoint is always kept.** A [checkpoint of your
   own](INSTALL.md#your-own-flash-checkpoint) sits beside it, so going back never waits for a
   110 GB download. Only a checkpoint that matches its repository's hashes and passes Halogen's
-  `verify` can be chosen. After a Halogen update, `sudo halogenctl flash verify <name>` checks
-  it again with the new version.
+  `verify` can be chosen, and after a Halogen update the next start checks it again with the new
+  version.
 
 - **XRT comes with Halogen.** Since 0.19.1 Halogen's image carries AMD's XRT 2.25 with its
   NPU plugin, so halOS installs and mounts none ([Halogen's NPU host

@@ -77,7 +77,13 @@ name, but allows saying halOS runs Halogen.
   exact commit, and downloads only the checkpoint `.hgn`, its overlay, the vision tower and
   `tokenizer/`. The lookup table (`qwen38-flash-next-ngram.hgn`) comes only when
   `flash_serve --resident-gib` says the checkpoint doesn't carry one. Then it checks the
-  files against HF's LFS hashes, runs Halogen's `verify` and records everything in `halos.info`.
+  files against HF's hashes (LFS sha256, or the git blob id for small files), runs Halogen's
+  `verify` on the `.hgn` files except the table (verify doesn't list the table as a file it
+  takes), removes files an older pull left, and records everything in `halos.info`. A table
+  identical to the official one is hard-linked, not downloaded. `fetch-models` re-verifies the
+  chosen checkpoint when `verified_with` differs from `HALOGEN_VERSION`, and renders with
+  `HALOGEN_FLASH_FILE=/dev/null` so the choice never changes what is fetched.
+  `status`, `flash list` and the selftest read `render-config --show` to say what is served.
   `flash use` writes `/srv/configs/flash-checkpoint`; `render-config` turns it into
   `HALOGEN_CHECKPOINT` (no longer in `locked.env`), falling back to the official file for
   anything unexpected, and drops `HALOGEN_VISION_TOWER` when the custom folder has no tower. The
@@ -123,7 +129,7 @@ name, but allows saying halOS runs Halogen.
   `fetch-models` logs the size downloaded every minute.
 - Own NPU checkpoints (`d1-2B`, `LFM3-*`) are named by path, need NPU programs fetched, and
   are converted at first start. `halogen-npu probe` links XRT (in Halogen's image since 0.19.1), but it
-  needs no NPU device and only the checkpoint's config and tokenizer (checked against 0.19.0's
+  needs no NPU device (so neither the fetch nor `model pull` passes one) and only the checkpoint's config and tokenizer (checked against 0.19.0's
   image). Some of Halogen's models have no download of their own and reuse others' programs
   (`lfm3-omni-2b`, the `-fast` VL and Audio): check the model is known, not that it has a repo.
 - `cmd | grep -q` under `set -o pipefail` fails at random on long output: `grep -q` stops reading,

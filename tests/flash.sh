@@ -81,11 +81,18 @@ d="$work/models/flash/mine"
 grep -qx "hf $commit model.hgn qwen38-flash-next-vision.hgn tokenizer/chat_template.jinja tokenizer/tokenizer.json" "$work/hf.log" || fail "not fetched at the exact commit: $(cat "$work/hf.log")"
 { [ "$(info mine repo)" = someone/My-Flash-HGN ] && [ "$(info mine commit)" = "$commit" ] && [ "$(info mine checkpoint)" = model.hgn ]; } || fail "info wrong"
 { [ "$(info mine verified)" = pass ] && [ "$(info mine verified_with)" = 9.9.9 ]; } || fail "verify not recorded"
-{ grep -qx "verify /models/flash/mine/model.hgn" "$work/verify.log" && grep -q ngram "$work/verify.log"; } || fail "not every file verified"
+grep -qx "verify /models/flash/mine/model.hgn" "$work/verify.log" || fail "the checkpoint was not verified"
+if grep -q ngram "$work/verify.log"; then fail "verify was given the lookup table, which it doesn't take"; fi
 grep -qx 'name=mine' "$work/out" || fail "no name line"
 if grep -q '^Hint' "$work/out"; then fail "hf noise reached the output"; fi
 grep 'podman run' "$work/podman.log" | grep ' verify ' | grep -q -- '--network=none --cap-drop=all' || fail "verify was not offline and without capabilities"
-grep 'podman run' "$work/podman.log" | grep -- '--entrypoint hf' | grep -q -- '--cap-drop=all' || fail "the download kept capabilities"
+grep 'podman run' "$work/podman.log" | grep -- '--entrypoint hf' > "$work/runs"
+grep -q -- '--cap-drop=all' "$work/runs" || fail "the download kept capabilities"
+if grep -v -- "-v $work/models/flash/mine:/models/flash/mine " "$work/runs" | grep -q .; then fail "the download saw more than its own folder"; fi
+grep 'podman run' "$work/podman.log" | grep -- '--entrypoint python3' > "$work/runs"
+if grep -q -- ' -v ' "$work/runs"; then fail "the listing had a folder mounted"; fi
+grep 'podman run' "$work/podman.log" | grep -e ' verify ' -e flash_serve > "$work/runs"
+if grep -q -- '--ipc=host' "$work/runs" || grep -v -- '--read-only --tmpfs /tmp' "$work/runs" | grep -q .; then fail "a check tool shares the server's IPC or a writable image"; fi
 ok "a pull fetches only what Halogen loads, at the exact commit, checks it and records it"
 
 # A checkpoint that carries its own lookup table doesn't need the 48 GB file.
@@ -164,4 +171,26 @@ if "$tool" verify empty > "$work/out" 2>&1; then fail "a folder with no checkpoi
 [ "$(info empty verified)" = fail ] || fail "the empty folder was not marked failed"
 for bad in -x _x; do if "$tool" pull someone/X --as "$bad" > "$work/out" 2>&1; then fail "the name $bad was accepted"; fi; done
 ok "links and empty folders fail verify, and names start with a letter or digit"
+
+# A new commit without a file an older pull had: the old file goes, so it can't be loaded.
+reset_repo; put model.overlay.hgn sidecar
+pull someone/Sidecar --as side || fail "pull failed"
+[ -f "$work/models/flash/side/model.overlay.hgn" ] || fail "the overlay was not fetched"
+grep -q 'model.overlay.hgn' "$work/hf.log" || fail "the overlay was not requested"
+rm "$work/repo/model.overlay.hgn" "$work/repo/tokenizer/chat_template.jinja"
+pull someone/Sidecar --as side || fail "the second pull failed"
+if [ -e "$work/models/flash/side/model.overlay.hgn" ] || [ -e "$work/models/flash/side/tokenizer/chat_template.jinja" ]; then
+  fail "files from the older commit were left beside the new checkpoint"
+fi
+ok "files an older pull left behind are removed"
+
+# A lookup table identical to the official one is shared, not downloaded again.
+reset_repo; cp "$work/repo/qwen38-flash-next-ngram.hgn" "$work/models/qwen38-flash-next-ngram.hgn"
+pull someone/Same-Table --as same || fail "pull failed"
+[ "$(stat -c %i "$work/models/flash/same/qwen38-flash-next-ngram.hgn")" = "$(stat -c %i "$work/models/qwen38-flash-next-ngram.hgn")" ] || fail "the table was not shared"
+if grep -q ngram "$work/hf.log"; then fail "the shared table was downloaded"; fi
+printf 'other' > "$work/models/qwen38-flash-next-ngram.hgn"
+pull someone/Same-Table --as differs || fail "pull failed"
+grep -q ngram "$work/hf.log" || fail "a different table was not downloaded"
+ok "a lookup table identical to the official one is shared rather than downloaded"
 

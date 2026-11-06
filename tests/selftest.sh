@@ -33,7 +33,7 @@ f firewall-cmd 'case "$1" in --state) echo "${FAKE_FIREWALL:-running}" ;; --get-
 f lsblk 'echo "/dev/nvme0n1p3 crypto_LUKS"'
 f cryptsetup 'printf "Tokens:\n  0: systemd-tpm2\n"'
 f amd-smi 'if [ -n "${FAKE_NOGPU:-}" ]; then echo "ERROR:root:Unable to detect any GPU devices"; exit 255; fi; printf "GPU: 0\n    BDF: 0000:c3:00.0\n"'
-f systemd-run 'echo "preflight: ok"'
+f systemd-run 'case "$*" in *render-config*) printf "%s\n" "${FAKE_RENDER:-HALOGEN_CHECKPOINT=/models/qwen38-flash-next-v2.hgn}" ;; *) echo "preflight: ok" ;; esac'
 f bootc 'echo "Booted image: ghcr.io/n4berius/halos-flash:9.9.9"'
 f systemctl 'case "$*" in *--failed*) cat "$FAKE/failed" 2>/dev/null ;; *"show -p Job"*) echo "${FAKE_JOB:-}" ;;
   *halogen-fetch*) echo "${FAKE_FETCH:-inactive}" ;; *) echo "${FAKE_STATE:-active}" ;; esac'
@@ -138,10 +138,13 @@ ok "Halogen waiting for the fetch, or stopping, is a warning; a failed fetch or 
 expect '^INFO flash: serving the official Flash checkpoint'
 mkdir -p "$work/models/flash/mine"; printf 'repo=someone/Mine-HGN\n' > "$work/models/flash/mine/halos.info"
 echo mine > "$work/configs/flash-checkpoint"
+export FAKE_RENDER=HALOGEN_CHECKPOINT=/models/flash/mine/model.hgn
 "$selftest" > "$work/out" 2>&1 || true
 expect '^INFO flash: serving your own Flash checkpoint mine \(someone/Mine-HGN\)'
 FAKE_STATE=failed "$selftest" > "$work/out" 2>&1 || true
 expect '^WARN flash: .*mine.*sudo halogenctl flash use official'
+FAKE_RENDER=$'halogen-config: mine has not passed the check; using the official one\nHALOGEN_CHECKPOINT=/models/qwen38-flash-next-v2.hgn' "$selftest" > "$work/out" 2>&1 || true
+expect '^WARN flash: you chose your own Flash checkpoint mine, but Halogen serves the official one: mine has not passed'
 grep -q "runuser -u halogen -- head -n 1 $work/configs/flash-checkpoint" "$work/runuser.log" || { echo "the choice was read as root" >&2; exit 1; }
 rm -r "$work/models/flash" "$work/configs/flash-checkpoint"
 "$selftest" > "$work/out" 2>&1 || true
