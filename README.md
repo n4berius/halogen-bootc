@@ -78,7 +78,7 @@ download the models.
 
 | Location | Contents | Changes through |
 |---|---|---|
-| OS image | Kernel arguments, XRT, services, firewall, Halogen digest | Rebuild and `bootc upgrade` |
+| OS image | Kernel arguments, services, firewall, Halogen digest | Rebuild and `bootc upgrade` |
 | `/srv/configs` | `halogen.env` (yours), `halogen.env.example` (every option, refreshed each boot), `api-key` | Edit `halogen.env` on the machine |
 | `/usr/share/halogen` | Locked settings and the allowed-option list | Rebuild only, read-only |
 | `/srv/models` | Flash weights and NPU models, about 125 GB, on their own volume | Fetched on first boot |
@@ -91,7 +91,7 @@ download the models.
 | Image | `halos-flash:0.19.0` | `halos-flash:0.19.0-no-npu` |
 | Serves | Flash and NPU models | Flash only |
 | IOMMU | `iommu=pt`, which the NPU needs | `amd_iommu=off`, for Halogen's measured 13-16% more prefill |
-| Includes | XRT, the fabric clock service | Neither |
+| Includes | The fabric clock service | No |
 | KV pool | 262,144 positions, leaving room for NPU models | Halogen's default |
 
 `amd_iommu=off` turns off DMA translation machine-wide. That suits a dedicated server,
@@ -216,8 +216,10 @@ the single folder (the 0.18.23 releases and earlier) downloads all its NPU model
 
 ## Choices worth knowing
 
-- **XRT comes from Debian.** Fedora's package appears only in Rawhide, and the libraries
-  run inside Halogen's Debian 13 container, so Debian's build matches its C runtime.
+- **XRT comes with Halogen.** Since 0.19.1 Halogen's image carries AMD's XRT 2.25 with its
+  NPU plugin, so halOS installs and mounts none ([Halogen's NPU host
+  notes](https://github.com/peonist-ai/halogen-flash-server/blob/main/docs/NPU.md#host)). Only
+  the NPU driver and firmware come from the OS.
 - **The NPU edition keeps the IOMMU on** because the NPU needs it, at the cost of the
   prefill gain the no-NPU edition takes.
 - **Root never logs in over SSH,** with a password or a key, even if it was allowed in the

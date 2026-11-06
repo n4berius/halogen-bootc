@@ -1,25 +1,4 @@
-ARG DEBIAN_IMAGE
 ARG FEDORA_BOOTC_IMAGE
-
-# Fedora's XRT packaging does not reach Fedora 45, and XRT has to load inside
-# Halogen's Debian 13 container. So the libraries come from Debian.
-FROM ${DEBIAN_IMAGE} AS xrt
-ARG XRT_MIN_VERSION
-RUN set -eu; \
-    echo 'deb http://deb.debian.org/debian trixie-backports main' > /etc/apt/sources.list.d/backports.list; \
-    apt-get -qq update; \
-    mkdir -p /debs /root-xrt /out/lib /out/licenses; \
-    cd /debs; \
-    apt-get -qq download -t trixie-backports libxrt2 libxrt-npu2; \
-    for deb in ./*.deb; do dpkg-deb -x "$deb" /root-xrt; done; \
-    lib=/root-xrt/usr/lib/x86_64-linux-gnu; \
-    version="$(basename "$(readlink -f "$lib/libxrt_coreutil.so.2")" | sed 's/^libxrt_coreutil\.so\.//')"; \
-    printf '%s\n%s\n' "$XRT_MIN_VERSION" "$version" | sort -V -C \
-      || { echo "XRT $version is older than $XRT_MIN_VERSION" >&2; exit 1; }; \
-    for f in libxrt_coreutil.so.2 libxrt_core.so.2 libxrt_driver_xdna.so.2; do cp -L "$lib/$f" "/out/lib/$f"; done; \
-    cp -L /root-xrt/usr/share/doc/libxrt2/copyright /out/licenses/copyright; \
-    echo "$version" > /out/VERSION; \
-    (cd /debs && sha256sum ./*.deb) > /out/debs.sha256
 
 FROM ${FEDORA_BOOTC_IMAGE} AS os
 ARG HALOGEN_VARIANT
@@ -55,10 +34,6 @@ RUN dnf -y --setopt=install_weak_deps=False install \
 COPY files/ /
 COPY variants/${HALOGEN_VARIANT}/ /
 COPY LICENSE THIRD-PARTY-NOTICES.md /usr/share/licenses/halos-flash/
-COPY --from=xrt /out/lib/ /usr/lib/halogen/xrt/
-COPY --from=xrt /out/licenses/ /usr/share/licenses/halogen-xrt/
-COPY --from=xrt /out/VERSION /usr/lib/halogen/xrt/VERSION
-COPY --from=xrt /out/debs.sha256 /usr/lib/halogen/xrt/debs.sha256
 
 # Upstream's clock script and terms, unmodified and checked by hash.
 RUN set -eu; \
@@ -91,7 +66,7 @@ RUN set -eu; \
     if [ "$HALOGEN_VARIANT" = npu ]; then \
       systemctl enable halogen-fabric-clock.service; \
     else \
-      rm -rf /usr/lib/halogen/xrt /usr/share/licenses/halogen-xrt /usr/lib/systemd/system/halogen-fabric-clock.service /usr/libexec/halogen/halogen-fabric-clock; \
+      rm -rf /usr/lib/systemd/system/halogen-fabric-clock.service /usr/libexec/halogen/halogen-fabric-clock; \
     fi; \
     systemctl mask bootc-fetch-apply-updates.timer; \
     systemctl disable systemd-homed.service systemd-homed-activate.service

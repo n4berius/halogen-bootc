@@ -11,7 +11,6 @@ needed_gib="${HALOGEN_MODELS_NEEDED_GIB:-125}"
 max_wait="${HALOGEN_RETRY_MAX_S:-300}"
 progress_s="${HALOGEN_PROGRESS_S:-60}"
 hf_token="${HALOGEN_HF_TOKEN_FILE:-/srv/configs/hf-token}"
-xrt="${HALOGEN_XRT_DIR:-/usr/lib/halogen/xrt}"
 npu_device="${HALOGEN_NPU_DEVICE:-/dev/accel/accel0}"
 
 # shellcheck disable=SC1090
@@ -97,15 +96,10 @@ else
 fi
 
 # On the NPU edition, Halogen's NPU tool reads your own checkpoints. Give it what the server
-# has: XRT at the same three paths, the NPU device, and the groups that may open it.
+# has: the NPU device and the groups that may open it. XRT comes with Halogen's image.
 npu_args=()
-if [ -d "$xrt" ]; then
-  for lib in libxrt_coreutil.so.2 libxrt_core.so.2 libxrt_driver_xdna.so.2; do
-    for at in /opt/xilinx/xrt/lib /usr/lib/x86_64-linux-gnu /opt/xilinx/lib/x86_64-linux-gnu; do
-      npu_args+=(-v "$xrt/$lib:$at/$lib:ro")
-    done
-  done
-  [ ! -e "$npu_device" ] || npu_args+=(--device "$npu_device" --group-add keep-groups)
+if [ "${HALOGEN_VARIANT:-}" = npu ] && [ -e "$npu_device" ]; then
+  npu_args+=(--device "$npu_device" --group-add keep-groups)
 fi
 
 wait_s=15

@@ -39,7 +39,6 @@ Check these terms yourself before commercial use, especially for models you add.
 |---|---|---|---|
 | Fedora Linux 45 `fedora-bootc` base and RPM packages | [Fedora](https://fedoraproject.org/) | Various, per package | Texts are under `/usr/share/licenses` and `/usr/share/doc` |
 | `linux-firmware`, `amd-gpu-firmware` | Fedora | Various, including redistributable binary firmware | Terms are in the packages |
-| AMD XRT 2.25.0: `libxrt_coreutil`, `libxrt_core`, `libxrt_driver_xdna` | [Debian](https://tracker.debian.org/pkg/xrt) `trixie-backports`, from [AMD XRT](https://github.com/Xilinx/XRT) | Mainly Apache-2.0, with bundled parts under MIT, Expat, BSD-3-Clause and Khronos terms | NPU edition only. Debian's copyright file is at `/usr/share/licenses/halogen-xrt/copyright` |
 
 ## In the installer ISO
 
@@ -53,8 +52,7 @@ the USB drive and are not installed on the machine.
 | Dracut, Plymouth and other live environment packages | Per package |
 
 Both the OS image and the ISO are aggregates of separately licensed programs. Source for
-Fedora packages is available from [Fedora](https://src.fedoraproject.org/), and source for
-Debian's XRT packages from [Debian](https://tracker.debian.org/pkg/xrt).
+Fedora packages is available from [Fedora](https://src.fedoraproject.org/).
 
 ## Build tools
 

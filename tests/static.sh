@@ -32,7 +32,7 @@ for path in units:
 
 q = open("files/etc/containers/systemd/users/970/halogen.container").read()
 n = open("variants/npu/etc/containers/systemd/users/970/halogen.container.d/10-npu.conf").read()
-assert "accel" not in q and "/usr/lib/halogen/xrt" not in q
+assert "accel" not in q
 locked = {l.split("=")[0] for l in open("files/usr/share/halogen/locked.env") if l.startswith("HALOGEN_")}
 for edition in ("npu", "no-npu"):
     allowed = set(open(f"variants/{edition}/usr/share/halogen/options.allowed").read().split())
@@ -41,11 +41,14 @@ for edition in ("npu", "no-npu"):
     assert (edition == "npu") == ("HALOGEN_NPU_MODELS" in allowed)
 assert "HALOGEN_DOWNLOAD" not in q.replace("# No download settings here", "")
 assert "@sha256" not in q and "Image=@HALOGEN_IMAGE@" in q
-for lib in ("libxrt_coreutil", "libxrt_core", "libxrt_driver_xdna"):
-    assert len(re.findall(rf"^Volume=/usr/lib/halogen/xrt/{lib}\.so\.2:", n, re.M)) == 3, lib
+# Halogen carries XRT from 0.19.1. A partial host XRT is refused, so mount none at all.
+assert not re.search(r"^Volume=.*(xilinx|libxrt)", n, re.M | re.I), "no XRT mounts: Halogen's image has its own"
 xml.dom.minidom.parse("files/usr/lib/firewalld/services/halogen.xml")
 pins = dict(l.strip().split("=", 1) for l in open("versions.env") if "=" in l and not l.startswith("#"))
 assert re.fullmatch(r"[0-9a-f]{40}", pins["HALOGEN_WEIGHTS_REVISION"]), "HALOGEN_WEIGHTS_REVISION must be a commit, not a branch"
+# Older Halogen images have no XRT of their own and need the host's.
+assert tuple(map(int, pins["HALOGEN_VERSION"].split("."))) >= (0, 19, 1), "Halogen before 0.19.1 needs the host's XRT"
+assert "DEBIAN_IMAGE" not in pins and "XRT_MIN_VERSION" not in pins
 print("static checks ok")
 P
 python3 -c "import glob, yaml; [yaml.safe_load(open(f)) for f in glob.glob('.github/**/*.yml', recursive=True)]"

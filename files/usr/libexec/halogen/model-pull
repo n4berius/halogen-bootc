@@ -7,7 +7,6 @@ set -uo pipefail
 release="${HALOGEN_RELEASE_FILE:-/usr/share/halogen/release.env}"
 models="${HALOGEN_MODELS_DIR:-/srv/models}"
 hf_token="${HALOGEN_HF_TOKEN_FILE:-/srv/configs/hf-token}"
-xrt="${HALOGEN_XRT_DIR:-/usr/lib/halogen/xrt}"
 npu_device="${HALOGEN_NPU_DEVICE:-/dev/accel/accel0}"
 progress_s="${HALOGEN_PROGRESS_S:-30}"
 # shellcheck disable=SC1090
@@ -52,15 +51,8 @@ args=(-v "$models:/models")
 if [ -s "$hf_token" ]; then
   args+=(-v "$hf_token:/run/secrets/hf-token:ro" -e HF_TOKEN_PATH=/run/secrets/hf-token)
 fi
-# Halogen's NPU tool gets what the server has: XRT at its three paths and the NPU device.
-if [ -d "$xrt" ]; then
-  for lib in libxrt_coreutil.so.2 libxrt_core.so.2 libxrt_driver_xdna.so.2; do
-    for at in /opt/xilinx/xrt/lib /usr/lib/x86_64-linux-gnu /opt/xilinx/lib/x86_64-linux-gnu; do
-      args+=(-v "$xrt/$lib:$at/$lib:ro")
-    done
-  done
-  [ ! -e "$npu_device" ] || args+=(--device "$npu_device" --group-add keep-groups)
-fi
+# Halogen's NPU tool gets what the server has: the NPU device. XRT comes with Halogen's image.
+[ ! -e "$npu_device" ] || args+=(--device "$npu_device" --group-add keep-groups)
 # NET=none for steps that only read local files (the probe reads an untrusted checkpoint).
 in_image() {
   podman run --rm --pull=never --read-only --tmpfs /tmp --cap-drop=all --security-opt no-new-privileges \
