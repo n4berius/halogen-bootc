@@ -49,7 +49,8 @@ RUN dnf -y --setopt=install_weak_deps=False install \
     dnf clean all && \
     rm -rf /var/log/dnf5.log /var/lib/dnf /var/cache/libdnf5 /run/dnf && \
     rpm -q fwupd skopeo jq amd-ucode-firmware realtek-firmware mt7xxx-firmware atheros-firmware && \
-    ls -d /usr/lib/firmware/amdgpu /usr/lib/firmware/amdnpu
+    ls -d /usr/lib/firmware/amdgpu /usr/lib/firmware/amdnpu && \
+    command -v runuser
 
 COPY files/ /
 COPY variants/${HALOGEN_VARIANT}/ /

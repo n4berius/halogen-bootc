@@ -74,6 +74,9 @@ grep -qE '^Image: +[a-z]' "$out/report.txt" || { echo "halosctl did not read boo
 # even with the installer's "allow root SSH" (rootpw --allow-ssh above) also written.
 grep -q '01-permitrootlogin.conf' "$out/report.txt" || { echo "the installer did not write its allow-root file" >&2; exit 1; }
 grep -qix 'permitrootlogin no' "$out/report.txt" || { echo "sshd allows root logins" >&2; exit 1; }
+# Security audit P1: root's prepare must not chown or chmod a root folder through a planted link.
+grep -qE '^drwxr-xr-x\.? +[0-9]+ root +root .*/var/tmp/victim' "$out/report.txt" \
+  || { echo "halogen-prepare changed a root-owned folder through a link" >&2; grep victim "$out/report.txt" >&2; exit 1; }
 echo "installed system verified"
 
 # halogenctl selftest, as people run it on hardware. Only what a VM can pass is required.
