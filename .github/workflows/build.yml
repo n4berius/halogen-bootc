@@ -49,7 +49,8 @@ jobs:
         if: steps.changes.outputs.build == 'true'
         run: scripts/build.sh
       - name: Push
-        if: github.event_name != 'pull_request' && steps.changes.outputs.build == 'true'
+        # Only main publishes edge; its signature names main (scripts/sign-image.sh).
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && steps.changes.outputs.build == 'true'
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u "${{ github.actor }}" --password-stdin
           edge="$(scripts/image-ref.sh | sed 's/:[^:]*$//'):edge$([ "$HALOGEN_VARIANT" = npu ] || echo -no-npu)"
