@@ -64,7 +64,7 @@ fi
 # NET=none for steps that only read local files (the probe reads an untrusted checkpoint).
 in_image() {
   podman run --rm --pull=never --read-only --tmpfs /tmp --cap-drop=all --security-opt no-new-privileges \
-    ${NET:+--network="$NET"} \
+    ${NET:+--network="$NET" -e HF_HUB_OFFLINE=1} \
     -e HF_HOME=/tmp/hf -e HF_HUB_OFFLINE=0 -e HF_HUB_DISABLE_TELEMETRY=1 -e HF_HUB_DISABLE_PROGRESS_BARS=1 \
     "${args[@]}" --entrypoint "$1" "$HALOGEN_IMAGE" "${@:2}"
 }

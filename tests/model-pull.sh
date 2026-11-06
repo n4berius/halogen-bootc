@@ -41,7 +41,7 @@ out="$("$pull" LiquidAI/LFM3-1.7B 2>&1)"
 grep -qx 'path=/models/LFM/LFM3-1.7B' <<< "$out" && grep -qx 'fast=1' <<< "$out"
 if grep -q 'Hint:' <<< "$out"; then echo "hf noise reached the user" >&2; exit 1; fi
 grep -q -- "--exclude \*.gguf" "$work/podman.log"
-grep 'halogen-npu' "$work/podman.log" | grep -q -- '--network=none' || { echo "the probe of an untrusted checkpoint had network" >&2; exit 1; }
+grep 'halogen-npu' "$work/podman.log" | grep -q -- '--network=none -e HF_HUB_OFFLINE=1' || { echo "the probe of an untrusted checkpoint had network" >&2; exit 1; }
 if grep 'entrypoint hf' "$work/podman.log" | grep -q -- '--network=none'; then echo "the download lost its network" >&2; exit 1; fi
 ok "an LFM3 checkpoint lands in LFM, with its path and :fast named, and other formats skipped; only the download has network"
 
