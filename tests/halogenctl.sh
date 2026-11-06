@@ -75,9 +75,12 @@ if ! grep -qE '^  HALOGEN_MTP_GATE_P +set ' "$work/out" || ! grep -qE '^  HALOGE
 fi
 [ "$(grep -c '^  HALOGEN_' "$work/out")" = "$(grep -cE '^#?HALOGEN_' "$template")" ] || { echo "options missed some" >&2; exit 1; }
 cp "$template" "$work/configs/halogen.env"
-HALOGEN_ENV_TEMPLATE="$template" "$ctl" options --new | grep -q '^Nothing new' || { echo "a complete file still had new options" >&2; exit 1; }
+# Through a file, not a pipe: grep -q stops reading early, and with pipefail that fails the check.
+HALOGEN_ENV_TEMPLATE="$template" "$ctl" options --new > "$work/out"
+grep -q '^Nothing new' "$work/out" || { cat "$work/out" >&2; echo "a complete file still had new options" >&2; exit 1; }
 printf '  HALOGEN_KV8=1\n' >> "$work/configs/halogen.env"
-HALOGEN_ENV_TEMPLATE="$template" "$ctl" options | grep -qE '^  HALOGEN_KV8 +set ' || { echo "an indented setting was not shown as set" >&2; exit 1; }
+HALOGEN_ENV_TEMPLATE="$template" "$ctl" options > "$work/out"
+grep -qE '^  HALOGEN_KV8 +set ' "$work/out" || { cat "$work/out" >&2; echo "an indented setting was not shown as set" >&2; exit 1; }
 rm "$work/configs/halogen.env"
 if HALOGEN_ENV_TEMPLATE="$template" "$ctl" options --new > "$work/out" 2>&1; then echo "options ran without a readable halogen.env" >&2; exit 1; fi
 grep -q 'Run it with sudo' "$work/out" || { cat "$work/out" >&2; exit 1; }
