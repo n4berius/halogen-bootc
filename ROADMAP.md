@@ -34,7 +34,8 @@ In this order. Each ships as an alpha, then is promoted to beta once tested.
 
 ## After the release candidate, before stable
 
-- **Benchmark command** (#15). A fixed-length run with Halogen's `ignore_eos`, to compare
+- **Benchmark command** (#15). A fixed-length run with Halogen's `ignore_eos` (new in
+  [0.19.1](https://github.com/peonist-ai/halogen-flash-server/blob/main/CHANGELOG.md)), to compare
   releases and checkpoints fairly.
 - **`halogenctl flash check`** (#56). Compare a custom checkpoint's quality with the official
   one's, on request.

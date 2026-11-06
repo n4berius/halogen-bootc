@@ -1,6 +1,6 @@
 # Changelog
 
-What changed in each halOS release, newest first, in plain language. The numbers link to the
+What changed in each halOS release, newest version first, in plain language. Dates are UTC. The numbers link to the
 pull requests with the details. Halogen's own changes are in its
 [changelog](https://github.com/peonist-ai/halogen-flash-server/blob/main/CHANGELOG.md).
 
@@ -40,18 +40,18 @@ promoted.
 - `sudo halogenctl model list` is readable. (#55)
 - Edge is rebuilt weekly, so machines get Fedora fixes in quiet weeks. (#54)
 
-## v0.19.0-beta.1 (2026-11-05)
+## v0.19.0-beta.1 (2026-11-06)
 
 Promoted from `v0.19.0-alpha.4`. Freyja passed the beta hardware checklist:
 - TPM unlock
 - `halosctl` switch, upgrade and rollback, each keeping `/srv`
 - selftest 30 of 30
 
-## v0.19.0-alpha.5 (2026-11-05)
+## v0.19.0-alpha.5 (2026-11-06)
 
 - Every pushed image is signed with cosign, keyless. Machines don't check it yet. (#50)
 
-## v0.19.0-alpha.4 (2026-11-05)
+## v0.19.0-alpha.4 (2026-11-06)
 
 - No more fstab warning at every boot. `halosctl upgrade` says "Already up to date" instead of
   asking when there is nothing new. (#49)
@@ -90,7 +90,7 @@ Promoted from `v0.19.0-alpha.4`. Freyja passed the beta hardware checklist:
   - docs from the first hardware install (#17)
 - Enrolling the TPM again replaces the old binding. (#21)
 
-## v0.18.23-alpha.2 (2026-11-04)
+## v0.18.23-alpha.2 (2026-11-05)
 
 - **Boot and install fixes:**
   - LUKS boots on real hardware
