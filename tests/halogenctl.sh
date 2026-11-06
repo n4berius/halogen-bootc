@@ -60,3 +60,19 @@ mkdir -p "$work/models/LFM/old-model"; echo w > "$work/models/LFM/old-model/x"
 [ ! -e "$work/models/LFM/old-model" ] || { echo "model remove didn't delete:" >&2; cat "$work/out" >&2; exit 1; }
 grep -q "runuser -u halogen -- rm -rf -- $work/models/LFM/old-model" "$work/log" || { echo "model remove deleted as root" >&2; exit 1; }
 ok "model remove deletes as halogen"
+
+# model list: a clear "none yet" with no own checkpoints, then Halogen's NPU models one per line.
+rm -rf "$work/models"; mkdir -p "$work/models/npu/d3-lite" "$work/models/npu/qwen3.5-2b" "$work/models/LFM" "$work/models/decider" "$work/models/custom"
+printf 'HALOGEN_NPU_MODELS=qwen3.5-2b:fast\n' > "$work/configs/halogen.env"
+HALOGEN_MODELS_DIR="$work/models" "$ctl" model list > "$work/out"
+grep -q '^  None yet\. Add one with: sudo halogenctl model pull' "$work/out" || { cat "$work/out" >&2; echo "no 'none yet' line" >&2; exit 1; }
+if ! grep -qE '^  d3-lite +no$' "$work/out" || ! grep -qE '^  qwen3\.5-2b +yes$' "$work/out"; then
+  cat "$work/out" >&2; echo "NPU models not one per line with IN USE" >&2; exit 1
+fi
+mkdir -p "$work/models/LFM/my-lfm"; printf 'HALOGEN_NPU_MODELS=/models/LFM/my-lfm\n' > "$work/configs/halogen.env"
+HALOGEN_MODELS_DIR="$work/models" "$ctl" model > "$work/out"
+if ! grep -qE '^  NAME +FOLDER +SIZE +IN USE$' "$work/out" || ! grep -qE '^  my-lfm +LFM +[0-9.]+[KMG]? +yes$' "$work/out"; then
+  cat "$work/out" >&2; echo "own checkpoint not listed" >&2; exit 1
+fi
+if grep -q 'None yet' "$work/out"; then echo "said none with a checkpoint present" >&2; exit 1; fi
+ok "model list is readable: own checkpoints with size and use, then Halogen's models one per line"
