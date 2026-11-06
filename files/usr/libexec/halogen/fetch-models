@@ -21,9 +21,11 @@ pending="${HALOGEN_STATE_DIR:-/var/lib/halogen}/setup-pending"
 setup_wait="${HALOGEN_SETUP_WAIT_S:-1800}"
 if [ -e "$pending" ]; then
   echo "halogen-fetch: waiting for first-boot setup: sudo halosctl setup (or --skip). Without it, the download starts in $((setup_wait / 60)) minutes"
+  # Counted from now on the shell's own clock, not the marker's time: the wall clock can jump
+  # at first boot when it is set from the network.
+  waited_from=$SECONDS
   while [ -e "$pending" ]; do
-    age=$(( $(date +%s) - $(stat -c %Y "$pending" 2>/dev/null || date +%s) ))
-    if [ "$age" -ge "$setup_wait" ]; then
+    if [ $((SECONDS - waited_from)) -ge "$setup_wait" ]; then
       echo "halogen-fetch: no setup after $((setup_wait / 60)) minutes; starting with the defaults"
       rm -f "$pending"; break
     fi

@@ -24,6 +24,12 @@ answer() { printf '%s\n' "$@" > "$work/answers"; : > "$work/log"
   { sleep 1; cat "$work/answers"; } | script -qec "$ctl setup" /dev/null > "$work/out" 2>&1 || true; }
 
 touch "$work/state/setup-pending" "$work/dev/tpmrm0"
+answer No n n
+if grep -q enroll-tpm "$work/log"; then echo "'No' enrolled the TPM" >&2; exit 1; fi
+touch "$work/state/setup-pending"
+answer maybe Y n n
+grep -q 'Please answer y or n' "$work/out" || { cat "$work/out" >&2; echo "a wrong answer was not asked again" >&2; exit 1; }
+touch "$work/state/setup-pending"
 answer y n n
 grep -qx 'enroll-tpm' "$work/log" || { cat "$work/out" >&2; echo "TPM not enrolled" >&2; exit 1; }
 if grep -q 'halogenctl hf-token\|nano' "$work/log"; then echo "a declined step ran" >&2; exit 1; fi

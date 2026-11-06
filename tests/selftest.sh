@@ -14,6 +14,7 @@ for t in bash sh cat head tail sed awk grep find df date paste wc sort uname bas
   mktemp chmod rm stat tr cut printf python3 timeout id ls env mkdir; do
   p="$(command -v "$t")" && ln -sf "$p" "$sysbin/$t"
 done
+ln -sf /usr/bin/test "$sysbin/test"   # as_owner test -e runs the program, not the shell builtin
 
 echo "ASUS" > "$work/sys/class/dmi/id/board_vendor"; echo "board" > "$work/sys/class/dmi/id/board_name"
 echo "1.02" > "$work/sys/class/dmi/id/bios_version"
@@ -150,3 +151,9 @@ rm -r "$work/models/flash" "$work/configs/flash-checkpoint"
 "$selftest" > "$work/out" 2>&1 || true
 expect '^FAIL folder-flash: '
 ok "the Flash folder is checked, and the served checkpoint is named, with the way back when Halogen is down"
+
+# A new install waiting for first-boot setup says so, instead of "waiting for the download".
+mkdir -p "$work/state"; : > "$work/state/setup-pending"
+FAKE_STATE=inactive HALOGEN_STATE_DIR="$work/state" "$selftest" > "$work/out" 2>&1 || true
+expect '^WARN server: Halogen waits for first-boot setup: sudo halosctl setup'
+ok "a new install waiting for setup is named in the selftest"

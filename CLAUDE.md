@@ -168,8 +168,9 @@ and tracked on the owner's project board. [ROADMAP.md](ROADMAP.md) holds the ord
   the security hardening (#51 to #53), the options list (#57), Halogen 0.19.1 with its own XRT
   (#58, #59) and custom Flash checkpoints (#60). Freyja runs `unsloth-iq4` with `flash use`, at about
   the official model's speed.
-- Before RC, in this order: machines refuse unsigned images (#46 phase 2), first-boot setup and
-  "API ready" banner (#43), the guided installer with fixed `halos-*` volume names (#42), and a
+- Before RC, in this order: machines refuse unsigned images (#46 phase 2; needs key-pair signing,
+  since containers/image can't match GitHub's keyless URI identity, and the owner makes the key),
+  first-boot setup and "API ready" (#43, done in #63 and halosctl setup), the guided installer with fixed `halos-*` volume names (#42), and a
   full `security-auditor` pass.
 - Before stable: benchmark command (#15), `flash check` (#56), `halosctl npu on|off` (#40, trimmed
   to that), tab completion (#14). After stable: unlock over SSH (#13), clevis/tang (#44), GGUF in

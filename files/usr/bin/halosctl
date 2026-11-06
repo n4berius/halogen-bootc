@@ -224,7 +224,15 @@ case "$cmd" in
       exit 0
     fi
     [ -t 0 ] || die "setup asks questions, so run it in a terminal (or: sudo halosctl setup --skip)"
-    ask() { local a; read -rp "$1 " a; case "$a" in y|Y|yes|YES) return 0 ;; n|N|no|NO) return 1 ;; '') [ "$2" = y ] ;; *) [ "$2" = y ] ;; esac; }
+    # y or n in any case; Enter takes the default; anything else asks again.
+    ask() {
+      local a
+      while :; do
+        read -rp "$1 " a || return 1
+        case "${a,,}" in y|yes) return 0 ;; n|no) return 1 ;; '') [ "$2" = y ]; return ;; esac
+        echo "   Please answer y or n."
+      done
+    }
     echo "halOS setup. Each step can be skipped; run sudo halosctl setup again any time."
 
     echo; echo "1. How the disk unlocks at boot"
@@ -238,9 +246,11 @@ case "$cmd" in
     else echo "   Kept: you type the passphrase at each boot."; fi
 
     echo; echo "2. Hugging Face token (optional: higher download limits, and access to gated repositories)"
+    echo "   It stays on this machine, in /srv/configs, and is never printed."
     if as_halogen test -s "$configs/hf-token"; then echo "   A token is saved. Change it with: sudo halogenctl hf-token"
     elif ask "   Add one now? Create it at huggingface.co/settings/tokens (read access is enough). [y/N]" n; then
-      halogenctl hf-token || true
+      halogenctl hf-token > /dev/null || true
+      if as_halogen test -s "$configs/hf-token"; then echo "   Saved."; fi
     else echo "   Skipped. Add one later with: sudo halogenctl hf-token"; fi
 
     echo; echo "3. Settings"
