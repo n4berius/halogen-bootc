@@ -73,15 +73,21 @@ right away and fails if either is missing:
 - **Keyless:** GitHub vouches that this repository's `build.yml`, `release.yml` or `refresh.yml`
   made it. Sigstore's public transparency log records it: the repository, the workflow and the
   image digest, nothing else.
-- **With halOS's own key**, which is what machines check. Fedora's image checks can't recognise
+- **With halOS's own key**, which is what machines will check. Fedora's image checks can't recognise
   GitHub's keyless identity, so a key pair does that job. The private key lives only in the
   repository secrets `COSIGN_PRIVATE_KEY` and `COSIGN_PASSWORD` (and the owner's password
   manager); the public key is [`files/etc/pki/containers/halos-flash.pub`](files/etc/pki/containers/halos-flash.pub),
   in every image at `/etc/pki/containers/halos-flash.pub`.
 
-If the key is ever lost or leaks: make a new pair, replace both secrets, put the new public key in
-that file and in `scripts/sign-image.sh`, and release. Machines then trust the new key after their
-next upgrade, which is why the old public key should stay accepted for one release.
+Keep the private key and its password backed up. Once machines enforce signatures, they accept
+only images signed with the key they already have, so changing the key needs a bridge release
+signed with **both** the old and the new key and carrying both public keys. Machines upgrade to it
+with the old key and trust the new one from then on. If the old key is lost, no such bridge can be
+made, and each machine needs its policy changed by hand (or a reinstall) to move to a new key.
+
+If the key **leaked**, don't bridge: a release signed with it is exactly what an attacker could
+forge. Make a new pair and replace both secrets at once, then on each machine install the new
+public key and policy by hand (instructions will come with the release that enforces signatures).
 
 To check an image yourself with the key, with cosign installed:
 

@@ -8,7 +8,7 @@ done
 if command -v shellcheck >/dev/null; then shellcheck -x "${scripts[@]}"; else echo "shellcheck not installed, skipped"; fi
 
 python3 - <<'P'
-import configparser, glob, os, re, tomllib, xml.dom.minidom
+import configparser, glob, os, re, tomllib, xml.dom.minidom, yaml
 
 kargs = tomllib.load(open("variants/npu/usr/lib/bootc/kargs.d/10-halogen.toml", "rb"))["kargs"]
 no_npu = tomllib.load(open("variants/no-npu/usr/lib/bootc/kargs.d/10-halogen.toml", "rb"))["kargs"]
@@ -57,6 +57,11 @@ assert embedded + "\n" == open("files/etc/pki/containers/halos-flash.pub").read(
 for wf in ("build", "release", "refresh"):
     w = open(f".github/workflows/{wf}.yml").read()
     assert "COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}" in w, f"{wf}.yml doesn't pass the signing key"
+    # Only a step named Sign gets the key, and it runs nothing but the signing script.
+    for job in yaml.safe_load(w)["jobs"].values():
+        for step in job.get("steps", []):
+            if any(k.startswith("COSIGN_") for k in (step.get("env") or {})):
+                assert step.get("name") == "Sign" and "sign-image.sh" in step["run"] and "\n" not in step["run"].strip(), (wf, step.get("name"))
 print("static checks ok")
 P
 python3 -c "import glob, yaml; [yaml.safe_load(open(f)) for f in glob.glob('.github/**/*.yml', recursive=True)]"

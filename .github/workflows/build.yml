@@ -59,11 +59,16 @@ jobs:
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && steps.changes.outputs.build == 'true'
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Signing with halOS's own key (#46): only these steps get it.
-          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
-          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
         run: |
           echo "$GH_TOKEN" | podman login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
           edge="$(scripts/image-ref.sh | sed 's/:[^:]*$//'):edge$([ "$HALOGEN_VARIANT" = npu ] || echo -no-npu)"
           podman push "$(scripts/image-ref.sh)" "$edge"
-          GITHUB_TOKEN="$GH_TOKEN" scripts/sign-image.sh "$edge"
+          echo "EDGE_IMAGE=$edge" >> "$GITHUB_ENV"
+      - name: Sign
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && steps.changes.outputs.build == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # halOS's own signing key (#46): only this step gets it, and it runs only main's script.
+          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+        run: GITHUB_TOKEN="$GH_TOKEN" scripts/sign-image.sh "$EDGE_IMAGE"

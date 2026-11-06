@@ -25,12 +25,16 @@ bFysLUF3azuwIUBhmbvNzPERgxn9rDNbraHldK+i4aBedqF6TFkK7l+1vg==
 verify_only=0; [ "${1:-}" != --verify ] || { verify_only=1; shift; }
 [ $# -ge 1 ] || { echo "usage: sign-image.sh [--verify] <repo:tag> [repo:tag ...]" >&2; exit 2; }
 
-bin="${RUNNER_TEMP:-/tmp}/cosign-$COSIGN_VERSION"
-if [ ! -x "$bin" ]; then
-  curl -fsSL --retry 3 -o "$bin" "https://github.com/sigstore/cosign/releases/download/$COSIGN_VERSION/cosign-linux-amd64"
-  echo "$COSIGN_SHA256  $bin" | sha256sum -c -
-  chmod +x "$bin"
+# Before anything is signed: without the key, stop now rather than leave a half-signed image.
+if [ "$verify_only" = 0 ] && { [ -z "${COSIGN_PRIVATE_KEY:-}" ] || [ -z "${COSIGN_PASSWORD:-}" ]; }; then
+  echo "COSIGN_PRIVATE_KEY and COSIGN_PASSWORD are not set (repository secrets)" >&2; exit 1
 fi
+
+bin="${RUNNER_TEMP:-/tmp}/cosign-$COSIGN_VERSION"
+[ -f "$bin" ] || curl -fsSL --retry 3 -o "$bin" "https://github.com/sigstore/cosign/releases/download/$COSIGN_VERSION/cosign-linux-amd64"
+# Checked every time, not only after a download: earlier steps share this folder.
+echo "$COSIGN_SHA256  $bin" | sha256sum -c --quiet - || { rm -f "$bin"; exit 1; }
+chmod +x "$bin"
 cosign() { "$bin" "$@"; }
 # cosign reads Docker's credentials file, not podman's.
 [ -z "${GITHUB_TOKEN:-}" ] || echo "$GITHUB_TOKEN" | cosign login ghcr.io -u "${GITHUB_ACTOR:?}" --password-stdin
@@ -52,13 +56,12 @@ digest="$(skopeo inspect --format '{{.Digest}}' "docker://$1")"
 case "$digest" in sha256:[0-9a-f]*) ;; *) echo "no digest for $1: $digest" >&2; exit 1 ;; esac
 echo "Signing $repo@$digest"
 cosign sign --yes "$repo@$digest"
-if [ -z "${COSIGN_PRIVATE_KEY:-}" ] || [ -z "${COSIGN_PASSWORD:-}" ]; then
-  echo "COSIGN_PRIVATE_KEY and COSIGN_PASSWORD are not set (repository secrets)" >&2; exit 1
-fi
 # The key comes from the environment, never a file or the command line.
 cosign sign --yes --key env://COSIGN_PRIVATE_KEY "$repo@$digest"
 verify "$repo@$digest"
 # Machines check through containers/image, which reads the classic "<digest>.sig" tag.
-skopeo inspect --raw "docker://$repo:${digest/:/-}.sig" > /dev/null \
+# Both signatures, keyless and key, are layers of that one tag (cosign v2's classic layout).
+layers="$(skopeo inspect --raw "docker://$repo:${digest/:/-}.sig" | jq '.layers | length')" \
   || { echo "the signature is not in the .sig tag machines will read" >&2; exit 1; }
+[ "${layers:-0}" -ge 2 ] || { echo "the .sig tag holds $layers signature(s), not the keyless and key ones" >&2; exit 1; }
 for ref in "$@"; do verify "$ref"; echo "verified $ref"; done
