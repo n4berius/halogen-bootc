@@ -63,3 +63,10 @@ for f in .github/workflows/*.yml; do
   fi
 done
 echo "ok: every workflow that pushes an image signs it"
+
+# Halogen's container runs with no capabilities (security audit R2).
+q=files/etc/containers/systemd/users/970/halogen.container
+if ! grep -qx 'DropCapability=all' "$q" || ! grep -qx 'NoNewPrivileges=true' "$q"; then
+  echo "$q must drop all capabilities and set NoNewPrivileges" >&2; exit 1
+fi
+echo "ok: Halogen's container has no capabilities"
