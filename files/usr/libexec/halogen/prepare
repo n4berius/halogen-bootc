@@ -1,31 +1,37 @@
 #!/bin/bash
 # Runs as root on every boot. Safe to repeat.
+#
+# /srv/models and /srv/configs belong to the halogen user, and the fetch containers can write in
+# /srv/models. So root only creates those two folders (their parent, /var/srv, is root's), and
+# everything inside them is created as halogen: a link planted there can then only reach what
+# halogen could reach anyway, never a root-owned file.
 set -euo pipefail
-models=/var/srv/models
-configs=/var/srv/configs
+models="${HALOGEN_MODELS_DIR:-/var/srv/models}"
+configs="${HALOGEN_CONFIGS_DIR:-/var/srv/configs}"
+state="${HALOGEN_STATE_DIR:-/var/lib/halogen}"
+as_halogen() { runuser -u halogen -- "$@"; }
 
-install -d -o halogen -g halogen -m 0750 "$models" "$configs" /var/lib/halogen
+install -d -o halogen -g halogen -m 0750 "$models" "$configs" "$state"
 # shellcheck source=/dev/null
-. /usr/share/halogen/release.env
+. "${HALOGEN_RELEASE_FILE:-/usr/share/halogen/release.env}"
 if [ "$HALOGEN_VARIANT" = npu ]; then
   # Halogen's NPU models, and folders for your own checkpoints (halogenctl model pull).
-  install -d -o halogen -g halogen -m 0750 "$models/npu" "$models/decider" "$models/LFM" "$models/custom"
+  as_halogen install -d -m 0750 "$models/npu" "$models/decider" "$models/LFM" "$models/custom"
 fi
 
-if [ ! -e "$configs/halogen.env" ]; then
-  install -o halogen -g halogen -m 0640 /usr/share/halogen/halogen.env.default "$configs/halogen.env"
-fi
-if [ ! -e "$configs/api-key" ]; then
-  umask 077
-  head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n' > "$configs/api-key"
-  chown halogen:halogen "$configs/api-key"
-fi
+# shellcheck disable=SC2016 # expanded by the halogen shell, from its arguments
+as_halogen sh -c '[ -e "$1" ] || [ -L "$1" ] || install -m 0640 "$2" "$1"' \
+  sh "$configs/halogen.env" "${HALOGEN_ENV_DEFAULT:-/usr/share/halogen/halogen.env.default}"
+# shellcheck disable=SC2016
+as_halogen sh -c 'umask 077; [ -e "$1" ] || [ -L "$1" ] || head -c 32 /dev/urandom | od -An -tx1 | tr -d " \n" > "$1"' \
+  sh "$configs/api-key"
 
 if command -v selinuxenabled >/dev/null && selinuxenabled; then
   for dir in "$models" "$configs"; do
     case "$(stat -c %C "$dir")" in
       *:container_file_t:*) ;;
-      *) chcon -R -t container_file_t "$dir" ;;
+      # -R does not follow links (-P is the default), so this stays inside the folder.
+      *) chcon -R -P -t container_file_t "$dir" ;;
     esac
   done
 fi

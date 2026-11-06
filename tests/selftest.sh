@@ -42,6 +42,10 @@ f fabric-clock 'exit 0'
 f stat 'case "$2" in %G|%U) echo halogen ;; %C) case "$3" in *accel*) echo system_u:object_r:dri_device_t:s0 ;; *) echo system_u:object_r:container_file_t:s0 ;; esac ;; *) exec /usr/bin/stat "$@" ;; esac'
 f curl 'echo "curl $*" >> "$FAKE/curl.log"; case "$*" in *models*) echo "{\"data\":[{\"id\":\"halogen-qwen3.8-flash-next\"},{\"id\":\"qwen3.5-2b\"}]}" ;; *::1*) [ -n "${FAKE_NOIPV6:-}" ] && printf 000 || printf 200 ;; *) printf 200 ;; esac'
 echo "halogen" > "$work/services"
+# Files halogen owns are read through runuser (security audit P2/P7); log it, then run the command.
+f runuser 'echo "runuser $*" >> "$FAKE/runuser.log"; [ "$1 $2 $3" = "-u halogen --" ] || exit 9; shift 3; exec "$@"'
+mkdir -p "$work/models/.cache/huggingface/download"
+printf '8ef7ad828f7fa715cba0721a8ef9f9ab20d44e50\n' > "$work/models/.cache/huggingface/download/qwen38-flash-next-v2.hgn.metadata"
 
 export PATH="$fake:$sysbin" HALOGEN_RELEASE_FILE="$work/release.env" HALOGEN_SYSFS="$work/sys" \
   HALOGEN_DEV="$work/dev" HALOGEN_CMDLINE="$work/cmdline" HALOGEN_MEMINFO="$work/meminfo" \
@@ -58,7 +62,12 @@ for id in secure-boot kernel-iommu memory selinux-denials firewall luks-tpm gpu-
 done
 expect '^Summary: [0-9]+ passed, 0 warnings, 0 failed'
 expect 'serving: halogen-qwen3.8-flash-next qwen3.5-2b'
-ok "a healthy NPU machine passes every check"
+expect '^INFO weights: downloaded from weights commit 8ef7ad828f7f'
+if ! { grep -q "runuser -u halogen -- cat $work/configs/api-key" "$work/runuser.log" &&
+       grep -q "runuser -u halogen -- head -n 1 $work/models/.cache" "$work/runuser.log"; }; then
+  echo "the API key or weights record was read as root" >&2; exit 1
+fi
+ok "a healthy NPU machine passes every check, reading the halogen user's files as halogen"
 
 refuse 'SECRET-KEY-MARKER|SECRET-TOKEN-MARKER'
 if grep -q 'SECRET-KEY-MARKER' "$work/curl.log"; then echo "the API key was on a command line" >&2; exit 1; fi
