@@ -1,0 +1,15 @@
+[Unit]
+Description=halOS status on the login screen and in the SSH login message
+After=network-online.target user@970.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/halogen/login-status
+# Reads Halogen's state and writes only under /run. Costs a few milliseconds every 30 s.
+ProtectSystem=strict
+ReadWritePaths=/run
+ProtectHome=yes
+PrivateTmp=yes
+NoNewPrivileges=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+LockPersonality=yes

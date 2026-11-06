@@ -95,6 +95,7 @@ report = log.split("RESULT-START")[-1].split("RESULT-END")[0]
 # The real API key is compared inside the VM (grep -f never prints it); only a marker leaves.
 typed("halogenctl selftest > /tmp/st 2>&1; rc=$?; cat /tmp/st > /dev/ttyS0; "
       "grep -qF -f /srv/configs/api-key /tmp/st && echo SELFTEST-LEAK > /dev/ttyS0; "
+      "cat /run/issue.d/50-halos.issue /run/motd.d/50-halos > /dev/ttyS0; "
       "echo SELFTEST-RC=$rc > /dev/ttyS0\n")
 log = wait_serial("SELFTEST-RC=", 300)
 selftest = log.split("RESULT-END")[-1].split("SELFTEST-RC=")[0]

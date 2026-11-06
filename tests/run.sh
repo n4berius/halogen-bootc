@@ -17,5 +17,6 @@ tests/halogen-update.sh
 tests/model-pull.sh
 tests/flash.sh
 tests/selftest.sh
+tests/login-status.sh
 tests/halosctl.sh
 echo "all checks passed"

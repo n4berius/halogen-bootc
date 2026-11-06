@@ -100,6 +100,9 @@ if [ "$variant" = npu ]; then
   for f in decider LFM custom; do selftest_has "PASS folder-$f:"; done
 fi
 if grep -qE 'SELFTEST-LEAK|Bearer' "$out/selftest.txt"; then echo "selftest printed the API key" >&2; exit 1; fi
+# The login status (halos-status.timer): the console line and the SSH message's version lines.
+grep -qE '^halOS [^ ]+ \((npu|no-npu) edition\) - ' "$out/selftest.txt" || { echo "no login status line" >&2; exit 1; }
+grep -qE '^  Halogen: ' "$out/selftest.txt" || { echo "no version lines in the SSH message" >&2; exit 1; }
 echo "selftest verified"
 
 if [ -n "$luks" ]; then

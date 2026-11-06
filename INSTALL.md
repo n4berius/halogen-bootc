@@ -143,7 +143,20 @@ The first boot runs in this order:
    hashes in the pinned container.
 5. Halogen starts offline, with its models read-only, on port 8731.
 
-Log in and follow it:
+You can watch it without logging in. Above the login prompt, the machine's screen shows one line
+that updates by itself every 30 seconds:
+
+```
+halOS 0.19.1-beta.1 (npu edition) - downloading models 45%
+```
+
+It then reads `checking models`, then `starting`, and finally
+`ready: http://<this machine's address>:8731/v1`. If something stops it, the line says
+`download failed` or `stopped`, with the command to run next. Logging in over SSH shows the same
+line, plus the release, the channel, any staged update and the free space for models. The first
+time Halogen answers after a boot, anyone logged in gets a one-line notice.
+
+To follow the details, log in and run:
 
 ```bash
 sudo halogenctl fetch-logs
