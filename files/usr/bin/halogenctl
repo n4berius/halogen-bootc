@@ -85,7 +85,8 @@ case "${1:-status}" in
         ;;
       list)
         # What HALOGEN_NPU_MODELS serves now (one read, not one per model), without :fast.
-        active="$(as_halogen /usr/libexec/halogen/render-config --show 2>/dev/null | sed -n 's/^HALOGEN_NPU_MODELS=//p' | tr ',' '\n' | sed 's/:fast$//')"
+        # Each read may fail (no npu folder yet, the halogen user's services down): still list.
+        active="$( { as_halogen /usr/libexec/halogen/render-config --show 2>/dev/null || true; } | sed -n 's/^HALOGEN_NPU_MODELS=//p' | tr ',' '\n' | sed 's/:fast$//')"
         used() { if grep -qxF -- "$1" <<< "$active"; then echo yes; else echo no; fi; }
         echo "Your own checkpoints (/srv/models/decider, LFM and custom):"
         n=0
@@ -99,7 +100,7 @@ case "${1:-status}" in
         [ "$n" -gt 0 ] || echo "  None yet. Add one with: sudo halogenctl model pull <Hugging Face repo>"
         echo
         echo "Halogen's NPU models (/srv/models/npu):"
-        names="$(find "$models/npu" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' 2>/dev/null | sort)"
+        names="$( { find "$models/npu" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' 2>/dev/null || true; } | sort)"
         if [ -z "$names" ]; then echo "  None downloaded yet."
         else
           printf '  %-28s %s\n' NAME "IN USE"

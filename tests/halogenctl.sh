@@ -76,3 +76,11 @@ if ! grep -qE '^  NAME +FOLDER +SIZE +IN USE$' "$work/out" || ! grep -qE '^  my-
 fi
 if grep -q 'None yet' "$work/out"; then echo "said none with a checkpoint present" >&2; exit 1; fi
 ok "model list is readable: own checkpoints with size and use, then Halogen's models one per line"
+
+# No npu folder (the no-NPU edition, or before the first download) and a failing settings read:
+# the list still prints and exits 0.
+rm -rf "$work/models"; mkdir -p "$work/models/LFM"
+printf '#!/bin/bash\nexit 1\n' > "$work/bin/systemd-run"
+HALOGEN_MODELS_DIR="$work/models" "$ctl" model list > "$work/out" 2>&1 || { cat "$work/out" >&2; echo "model list failed with no npu folder" >&2; exit 1; }
+grep -q '^  None downloaded yet\.' "$work/out" || { cat "$work/out" >&2; echo "no 'None downloaded yet'" >&2; exit 1; }
+ok "model list still works with no NPU folder and no readable settings"
