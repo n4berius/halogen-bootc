@@ -15,27 +15,34 @@ needed_gib="${HALOGEN_MODELS_NEEDED_GIB:-125}"
 state_dir="$run/halos"
 mkdir -p "$state_dir" "$run/issue.d" "$run/motd.d" || exit 1
 
-user_unit() { systemctl --user --machine=halogen@.host is-active "$1" 2>/dev/null | head -n 1; }
 health() { curl -s -m 3 -o /dev/null -w '%{http_code}' "http://127.0.0.1:$port/health" 2>/dev/null; }
 
 # What Halogen is doing, in the words the login screen shows. "ready" ends in agetty's \4,
 # which the console fills in with this machine's IPv4 address; the SSH message says the name.
-fetch="$(user_unit halogen-fetch.service)"
-server="$(user_unit halogen.service)"
-code=""
-case "$server" in active|activating|reloading) code="$(health)" ;; esac
-if [ "$code" = 200 ]; then
+# When Halogen answers, that is all there is to know. Otherwise ask the halogen user's service
+# manager about both units in one call: each call opens a short login session for halogen, so
+# a running server costs none and anything else one per run.
+fetch=""; server=""
+if [ "$(health)" = 200 ]; then
   state=ready
+else
+  { read -r fetch; read -r server; } < <(systemctl --user --machine=halogen@.host is-active \
+    halogen-fetch.service halogen.service 2>/dev/null)
+fi
+if [ "${state:-}" = ready ]; then :
 elif [ "$fetch" = activating ]; then
-  if [ -f "$models/.fetch-stamp" ]; then state="checking models"
+  # As halogen: root never looks inside the halogen user's folders (see prepare).
+  if runuser -u halogen -- test -f "$models/.fetch-stamp"; then state="checking models"
   else
-    # As halogen: root doesn't walk the halogen user's folders (see prepare).
     have="$(runuser -u halogen -- du -s --block-size=1G --exclude="$models/flash" "$models" 2>/dev/null | cut -f1)"
-    pct=$(( ${have:-0} * 100 / needed_gib )); [ "$pct" -le 99 ] || pct=99
+    # A number only: this text came from another user's process.
+    [[ "$have" =~ ^[0-9]+$ ]] || have=0
+    pct=$(( have * 100 / needed_gib )); [ "$pct" -le 99 ] || pct=99
     state="downloading models ${pct}%"
   fi
 elif [ "$fetch" = failed ]; then state="download failed: sudo halogenctl fetch-logs"
 elif [ "$server" = active ] || [ "$server" = activating ] || [ "$server" = reloading ]; then state=starting
+elif [ -z "$server" ]; then state="starting up"
 else state="stopped: sudo halogenctl logs"
 fi
 

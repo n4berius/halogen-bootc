@@ -7,7 +7,7 @@ work="$(mktemp -d)"; trap 'rm -rf "$work"' EXIT
 mkdir -p "$work/bin" "$work/models" "$work/run"
 export FAKE="$work"
 f() { printf '#!/bin/bash\n%s\n' "$2" > "$work/bin/$1"; chmod +x "$work/bin/$1"; }
-f systemctl 'case "$*" in *halogen-fetch*) echo "${FAKE_FETCH:-inactive}" ;; *) echo "${FAKE_SERVER:-inactive}" ;; esac'
+f systemctl 'echo "systemctl $*" >> "$FAKE/log"; [ -z "${FAKE_NOBUS:-}" ] || exit 1; echo "${FAKE_FETCH:-inactive}"; echo "${FAKE_SERVER:-inactive}"'
 f curl 'echo "curl $*" >> "$FAKE/log"; printf "%s" "${FAKE_HEALTH:-000}"'
 f runuser 'echo "runuser $*" >> "$FAKE/log"; [ "$1 $2 $3" = "-u halogen --" ] || exit 9; shift 3; exec "$@"'
 f du 'printf "%s\t%s\n" "${FAKE_HAVE:-0}" "$*"'
@@ -49,6 +49,7 @@ if grep -qE 'Image:|[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' "$motd"; then echo "the SSH 
 grep -q 'wall halOS: Halogen is ready at http://freyja:8731/v1' "$work/log" || { echo "no ready notice" >&2; exit 1; }
 FAKE_SERVER=active FAKE_HEALTH=200 run
 if grep -q wall "$work/log"; then echo "the ready notice repeated" >&2; exit 1; fi
+if grep -q systemctl "$work/log"; then echo "asked the service manager though Halogen answers" >&2; exit 1; fi
 if grep -q halosctl "$work/log"; then echo "halosctl ran again within 10 minutes" >&2; exit 1; fi
 ok "ready shows the address on the console, the name over SSH, and is announced once"
 
@@ -56,5 +57,15 @@ FAKE_SERVER=failed run
 expect "$issue" 'stopped: sudo halogenctl logs'
 FAKE_SERVER=inactive run
 expect "$issue" 'stopped: sudo halogenctl logs'
-grep -q 'curl' "$work/log" && { echo "asked a stopped server for its health" >&2; exit 1; }
-ok "a stopped or failed Halogen says where to look"
+[ "$(grep -c '^systemctl' "$work/log")" = 1 ] || { echo "not one service-manager call per run" >&2; exit 1; }
+FAKE_NOBUS=1 run
+expect "$issue" '- starting up'
+ok "a stopped or failed Halogen says where to look, with one service-manager call per run"
+
+# What du prints comes from another user's process: only a number is used.
+rm -f "$work/models/.fetch-stamp"
+FAKE_FETCH=activating FAKE_HAVE='a[$(touch $FAKE/pwned)]' run
+[ ! -e "$work/pwned" ] || { echo "du output ran as a command" >&2; exit 1; }
+expect "$issue" 'downloading models 0%'
+grep -q "runuser -u halogen -- test -f $work/models/.fetch-stamp" "$work/log" || { echo "the stamp was checked as root" >&2; exit 1; }
+ok "du's output is used only as a number, and the stamp is checked as halogen"
