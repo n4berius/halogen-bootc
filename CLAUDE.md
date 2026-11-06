@@ -68,10 +68,13 @@ name, but allows saying halOS runs Halogen.
   every 30 s. When `/health` answers it asks nothing else. Before setup it says "waiting for setup".
 - First-boot setup (#43): `prepare` touches `/var/lib/halogen/setup-pending` only when
   `halogen.env` doesn't exist yet (a new install, never an upgrade). `fetch-models` waits while it
-  exists, up to `HALOGEN_SETUP_WAIT_S` (1800 s by its mtime), then removes it and starts with the
-  defaults. `sudo halosctl setup` asks TPM unlock (`halogen-enroll-tpm`), HF token (`halogenctl
-  hf-token`), and editing `halogen.env` (as halogen), then removes the marker; `--skip` removes it
-  at once. The VM test checks the pending line, then skips.
+  exists, up to `HALOGEN_SETUP_WAIT_S` (1800 s, counted with `$SECONDS`, not the marker's mtime:
+  the wall clock jumps at first boot), then removes it and starts with the defaults. `sudo halosctl
+  setup` asks TPM unlock (`halogen-enroll-tpm`), HF token (`halogenctl hf-token`), and editing
+  `halogen.env` the sudoedit way (root edits a private copy, written back as halogen; never an
+  editor as halogen on root's tty), then removes the marker; `--skip` removes it at once. The VM
+  test checks the pending line, then skips. On the serial console, `agetty --reload` can redraw
+  over output, so VM-test greps match only part of a line.
 - Settings: users edit `/srv/configs/halogen.env`. `render-config` keeps only the names in
   `options.allowed`, and `locked.env` wins over it. `halogenctl config` shows the result.
   `halogen.env` is copied once and never changed by halOS. `prepare` rewrites
