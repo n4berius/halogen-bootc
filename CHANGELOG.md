@@ -16,6 +16,10 @@ promoted.
   percentage, checking, starting, or `ready` with the address. The SSH login message shows the
   same, with the release, channel and any staged update. Logged-in users get a one-time notice
   when Halogen first answers after a boot. (#63)
+- **First-boot setup.** `sudo halosctl setup` asks how the disk unlocks (TPM or passphrase), for
+  an optional Hugging Face token, and whether to edit the settings. On a new install the first
+  download waits for it, up to 30 minutes, so the token and settings count from the start;
+  `--skip` starts it at once. Upgraded machines never wait. (#64)
 
 ## v0.19.1-alpha.2 (2026-11-06)
 

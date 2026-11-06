@@ -130,9 +130,31 @@ sudo dd if=halos-flash-v0.19.0-alpha.1-npu.iso of=/dev/sdX bs=4M status=progress
 The installer's graphical environment exists only on the USB drive. The installed system
 starts at a text login, and you don't need to create another account.
 
-## 6. Let the first boot finish
+## 6. First-boot setup, then let the first boot finish
 
-The first boot runs in this order:
+Log in as your admin user and run:
+
+```bash
+sudo halosctl setup
+```
+
+It asks three things, and you can skip each one:
+
+1. **How the disk unlocks at boot.** With the TPM, there's no passphrase to type while Secure
+   Boot and the BIOS stay the same; it runs `halogen-enroll-tpm` for you. Or keep typing the
+   passphrase at each boot.
+2. **A Hugging Face token.** Optional: it raises the download limits. Create a read token at
+   [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens).
+3. **Settings.** Open `/srv/configs/halogen.env` in an editor, or keep the defaults, which suit
+   most people.
+
+The first 130 GB download waits for setup, so your token and settings count from the start. If
+nobody runs setup within 30 minutes, the download starts with the defaults anyway, so a machine
+nobody logs into still comes up by itself. `sudo halosctl setup --skip` starts it at once. You
+can run `sudo halosctl setup` again at any time; it then offers to restart Halogen to apply your
+changes. Machines upgraded from an earlier release never wait.
+
+After setup, the first boot runs in this order:
 
 1. `halogen-prepare` creates `/srv/models`, `/srv/configs`, the config file and an API key.
 2. On the NPU edition, `halogen-fabric-clock` holds the clock Halogen needs for GPU and NPU
@@ -144,7 +166,8 @@ The first boot runs in this order:
 5. Halogen starts offline, with its models read-only, on port 8731.
 
 You can watch it without logging in. Above the login prompt, the machine's screen shows one line
-that updates by itself every 30 seconds:
+that updates by itself every 30 seconds. Before setup it reads `waiting for setup: sudo halosctl
+setup`, and then:
 
 ```
 halOS 0.19.1-beta.1 (npu edition) - downloading models 45%

@@ -174,7 +174,9 @@ if have systemctl; then
     inactive)
       job="$(user show -p Job --value halogen.service)"; fetch="$(user is-active halogen-fetch.service)"
       case "$job" in ''|*[!0-9]*) job="" ;; esac
-      if [ "$fetch" = failed ]; then
+      if as_owner test -e "${HALOGEN_STATE_DIR:-/var/lib/halogen}/setup-pending"; then
+        say WARN server "Halogen waits for first-boot setup: sudo halosctl setup (or --skip). Without it, it starts by itself within 30 minutes"
+      elif [ "$fetch" = failed ]; then
         say FAIL server "the download and check step failed, so Halogen did not start; see sudo halogenctl fetch-logs"
       elif [ -n "$job" ] || [ "$fetch" = activating ]; then
         say WARN server "Halogen is waiting for the download and check step; follow it with sudo halogenctl fetch-logs and run this again when it is done"

@@ -17,6 +17,7 @@ usage: halosctl version
        halosctl switch alpha|beta|rc|release|edge [--reboot] [--yes]
        halosctl rollback [--to <version>] [--reboot] [--yes]
        halosctl history
+       halosctl setup [--skip]
 
 Channels: alpha, beta and rc are test releases; release (stable) is for production; edge is
 every change to main. Each channel also gets newer releases of the more stable ones.
@@ -62,7 +63,7 @@ record() {
     "${SUDO_USER:-root}" >> "$history"
 }
 
-yes=0; reboot=0; check=0; to=""
+yes=0; reboot=0; check=0; skip=0; to=""
 confirm() {
   [ "$yes" = 1 ] && return 0
   [ -t 0 ] || die "nothing changed: add --yes to confirm without a terminal"
@@ -111,13 +112,14 @@ switch_to() {
 }
 
 cmd="${1:-version}"; [ $# = 0 ] || shift
-[ "$cmd" = history ] || load
+case "$cmd" in history|setup) ;; *) load ;; esac
 args=()
 while [ $# -gt 0 ]; do
   case "$1" in
     --yes|-y) yes=1 ;;
     --reboot) reboot=1 ;;
     --check) check=1 ;;
+    --skip) skip=1 ;;
     --to) [ $# -ge 2 ] || die "--to needs a version, such as 0.19.0-alpha.1"; to="$2"; shift ;;
     -h|--help) usage; exit 0 ;;
     -*) usage >&2; exit 2 ;;
@@ -203,6 +205,78 @@ case "$cmd" in
     ;;
   history)
     if [ -s "$history" ]; then cat "$history"; else echo "No changes recorded yet. Changes made with halosctl are listed here."; fi
+    ;;
+  setup)
+    # First-boot setup: how the disk unlocks, a Hugging Face token, settings. Each step can be
+    # skipped, and it can run again at any time. On a new install the first download waits for
+    # it (up to 30 minutes); finishing or --skip lets the download start.
+    state="${HALOGEN_STATE_DIR:-/var/lib/halogen}"; configs="${HALOGEN_CONFIGS_DIR:-/srv/configs}"
+    as_halogen() { runuser -u halogen -- "$@"; }
+    pending=0; ! as_halogen test -e "$state/setup-pending" || pending=1
+    release_fetch() {
+      [ "$pending" = 1 ] || return 0
+      as_halogen rm -f "$state/setup-pending"
+      echo "The first download (about 130 GB) starts now. The login screen shows its progress;"
+      echo "follow the details with: sudo halogenctl fetch-logs"
+    }
+    if [ "$skip" = 1 ]; then
+      release_fetch; [ "$pending" = 1 ] || echo "Setup isn't pending; nothing to skip."
+      exit 0
+    fi
+    [ -t 0 ] || die "setup asks questions, so run it in a terminal (or: sudo halosctl setup --skip)"
+    # y or n in any case; Enter takes the default; anything else asks again.
+    ask() {
+      local a
+      while :; do
+        read -rp "$1 " a || return 1
+        case "${a,,}" in y|yes) return 0 ;; n|no) return 1 ;; '') [ "$2" = y ]; return ;; esac
+        echo "   Please answer y or n."
+      done
+    }
+    echo "halOS setup. Each step can be skipped; run sudo halosctl setup again any time."
+
+    echo; echo "1. How the disk unlocks at boot"
+    crypt="$(lsblk -rno PATH,FSTYPE 2>/dev/null | awk '$2 == "crypto_LUKS" { print $1 }')"
+    if [ -z "$crypt" ]; then echo "   The disk isn't encrypted, so there is nothing to unlock."
+    elif [ ! -e "${HALOGEN_DEV:-/dev}/tpmrm0" ] && [ ! -e "${HALOGEN_DEV:-/dev}/tpm0" ]; then echo "   No TPM found: you type the passphrase at each boot."
+    elif [ "$(cryptsetup luksDump "$(head -n 1 <<< "$crypt")" 2>/dev/null | grep -cE '^[[:space:]]*[0-9]+: systemd-tpm2')" -gt 0 ]; then
+      echo "   It unlocks with the TPM already. After a BIOS or Secure Boot change: sudo halogen-enroll-tpm"
+    elif ask "   Unlock with the TPM, so no passphrase is needed while Secure Boot and the BIOS stay the same? [Y/n]" y; then
+      halogen-enroll-tpm || echo "   That didn't work; the passphrase still unlocks the disk. Try again later: sudo halogen-enroll-tpm"
+    else echo "   Kept: you type the passphrase at each boot."; fi
+
+    echo; echo "2. Hugging Face token (optional: higher download limits, and access to gated repositories)"
+    echo "   It stays on this machine, in /srv/configs, and is never printed."
+    if as_halogen test -s "$configs/hf-token"; then echo "   A token is saved. Change it with: sudo halogenctl hf-token"
+    elif ask "   Add one now? Create it at huggingface.co/settings/tokens (read access is enough). [y/N]" n; then
+      halogenctl hf-token > /dev/null || true
+      if as_halogen test -s "$configs/hf-token"; then echo "   Saved."; fi
+    else echo "   Skipped. Add one later with: sudo halogenctl hf-token"; fi
+
+    echo; echo "3. Settings"
+    echo "   Halogen's defaults suit most people. Every option, with what it does: sudo halogenctl options"
+    if ask "   Open /srv/configs/halogen.env in an editor now? [y/N]" n; then
+      # As sudoedit does: root edits a private copy, and the copy goes back as halogen. Nothing of
+      # halogen's (its home, an editor startup file) runs on root's terminal, and root never
+      # opens halogen's files itself.
+      editor="$(command -v "${EDITOR:-nano}" || command -v vi || true)"
+      [ -n "$editor" ] || die "no editor found; edit it with: sudo halogenctl options, then the file"
+      tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
+      as_halogen cat "$configs/halogen.env" > "$tmp/halogen.env" || die "could not read $configs/halogen.env"
+      cp "$tmp/halogen.env" "$tmp/before"
+      if "$editor" "$tmp/halogen.env" && ! cmp -s "$tmp/before" "$tmp/halogen.env"; then
+        # shellcheck disable=SC2016 # expanded by the halogen shell, from its arguments
+        as_halogen sh -c 'umask 027; cat > "$1.new" && mv -f "$1.new" "$1"' sh "$configs/halogen.env" < "$tmp/halogen.env"
+        echo "   Saved. What Halogen will get: sudo halogenctl config"
+      else echo "   No change."; fi
+      rm -rf "$tmp"; trap - EXIT
+    else echo "   Kept the defaults."; fi
+
+    echo
+    if [ "$pending" = 1 ]; then release_fetch
+    elif ask "Restart Halogen now, so the changes apply? It stops answering for a few minutes. [y/N]" n; then
+      halogenctl restart && echo "Restarting. The login screen shows when it is ready."
+    else echo "Apply changes later with: sudo halogenctl restart"; fi
     ;;
   help|-h|--help) usage ;;
   *) usage >&2; exit 2 ;;

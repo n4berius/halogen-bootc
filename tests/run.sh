@@ -19,4 +19,5 @@ tests/flash.sh
 tests/selftest.sh
 tests/login-status.sh
 tests/halosctl.sh
+tests/setup.sh
 echo "all checks passed"

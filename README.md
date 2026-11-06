@@ -168,6 +168,7 @@ To change what is allowed or locked, edit `files/usr/share/halogen/locked.env` o
 ## Operate
 
 ```bash
+sudo halosctl setup          # first-boot questions: TPM unlock, HF token, settings (again any time)
 sudo halogenctl status       # service state
 sudo halogenctl fetch-logs   # first-boot download progress
 sudo halogenctl logs         # server and fetch logs; add a number for more lines
