@@ -40,7 +40,7 @@ name, but allows saying halOS runs Halogen.
 | `Containerfile.installer`, `installer/` | The live installer image, Anaconda defaults (storage layout), branding and boot menu |
 | `files/` | Copied into both editions: systemd units, `halosctl`, `halogenctl`, `halogen-enroll-tpm`, `/usr/libexec/halogen/*` |
 | `variants/npu`, `variants/no-npu` | Per-edition kernel arguments, Quadlet drop-ins, the allowed-options list and default `halogen.env` |
-| `scripts/` | `build.sh`, `build-iso.sh`, `package-iso.sh` (single-file release ISO), `release-info.sh`, `gen-options.py` (options from upstream `FLAGS.md`), `halogen-update.sh` (pins a new Halogen release), `size-report.sh`, `channels.sh` (which channel tags a release moves), `next-tag.sh` (the next release tag), `push-image.sh` |
+| `scripts/` | `build.sh`, `build-iso.sh`, `package-iso.sh` (single-file release ISO), `release-info.sh`, `gen-options.py` (options from upstream `FLAGS.md`), `halogen-update.sh` (pins a new Halogen release), `size-report.sh`, `channels.sh` (which channel tags a release moves), `next-tag.sh` (the next release tag), `push-image.sh`, `sign-image.sh` (cosign signing) |
 | `tests/` | `run.sh` (fast checks, no GPU or network), `iso-install.sh` + `vm-login.py` (QEMU install test) |
 | `.claude/agents/` | Subagents: `code-reviewer` (QA review before merge) and `security-auditor` (audit, zero-cost hardening ideas). Both only read and report |
 | `.github/workflows/` | `build.yml` (image, edge tag), `iso.yml` (ISO + VM install test), `release.yml`, `refresh.yml` (weekly rebuild of stable), `halogen-update.yml` (daily: opens a PR for a new Halogen release) |
@@ -77,6 +77,9 @@ name, but allows saying halOS runs Halogen.
   the newest release at least that stable (`scripts/channels.sh`), so a channel never moves
   backwards. The version tag (`0.19.0`) moves with stable releases and weekly rebuilds. The
   image's release name is `HALOS_RELEASE` in `release.env` and its version label (#40).
+- Every pushed image is signed keyless with cosign by `scripts/sign-image.sh` (from main's copy,
+  also when promoting old code), and checked in the same job, including the classic `.sig` tag
+  that containers/image reads. Machines don't enforce it yet (#46 phase 2).
 
 ## Lessons already learned
 
@@ -105,25 +108,25 @@ name, but allows saying halOS runs Halogen.
 - The OS image is flattened (`FROM scratch` + `COPY --from=os / /`) after its `dnf remove`
   step, with `/sysroot/ostree` deleted first, as Fedora's rechunker does. Otherwise the removed
   files still ship in the base image's layers inside the ISO. File capabilities survive the copy.
-- GitHub release assets must be under 2 GiB. The ISO ships as `.iso.xz` (about 1981 MiB)
-  with little headroom (#26).
+- GitHub release assets must be under 2 GiB. Since the trimmed, flattened image (#22, #26) the
+  ISO ships as a plain `.iso` of about 1370 MiB; `package-iso.sh` falls back to `.iso.xz` if not.
 
 ## Where the work stands
 
-Open issues and the **beta** milestone are the source of truth, prioritised with the
-`priority: high/medium/low` labels. When this file was last updated (after the halOS rename):
+Open issues are the source of truth, prioritised with the `priority: high/medium/low` labels
+and tracked on the owner's project board. When this file was last updated (after
+`v0.19.0-beta.1`):
 
-- Merged: smaller ISO (#22, about 1368 MiB plain `.iso`), the Halogen update workflow (#24)
-  and the 0.19.0 update, one NPU folder and own checkpoints (#18, #19), weights pinned (#23),
-  `halogenctl selftest`, and the rename to halOS.
-- `v0.19.0-alpha.1` is out. Freyja moved to it with `bootc switch` and `sudo halogenctl selftest`
-  passed (29 PASS; the one WARN, a missing `regulatory.db`, is fixed by adding `wireless-regdb`).
-  Its weights metadata names commit `53113ce2dba7`, not the pin: the `.hgn` files are identical
-  at both commits, and the fetch only downloads weights that are missing.
-- Next on freyja: the soak test and `bootc upgrade`/rollback, which close the hardware
-  checklist (#25) for beta.
-- Without hardware: a `security-auditor` pass, more VM checks (removed packages, open ports),
-  a test for the `halogenctl model` wrapper, and clearer fetch messages for a wrong `:fast`.
+- Released: `v0.19.0-beta.1`, promoted from alpha.4. Freyja passed the beta checklist (#25,
+  closed): TPM unlock, `halosctl` switch, upgrade and rollback keeping `/srv`, selftest 30/30.
+- Before RC, in this order: image signing (#46; phase 1 signs every push, phase 2 ships the
+  machine-side policy in a later release), first-boot setup and "API ready" banner (#43), the
+  guided installer with fixed `halos-*` volume names (#42), and a full `security-auditor` pass.
+- Later: `halosctl` steps 2 and 3 (#40), a benchmark command (#15), tab completion (#14), unlock
+  over SSH (#13) and clevis/tang (#44).
+- Known upstream: bootc 1.17.1 rewrites `/etc/fstab` at every boot on Anaconda installs
+  (bootc-dev/bootc#2592); `bootc-fstab-edit.service.d/10-halos.conf` skips it. `bootc switch` to
+  the ref a machine already follows does nothing; use `bootc upgrade`.
 
 The owner's test machine is "freyja": an AMD Ryzen AI Halo Developer Platform (128 GB,
 2 TB NVMe), NPU edition, Secure Boot on.

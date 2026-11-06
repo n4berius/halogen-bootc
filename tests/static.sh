@@ -54,3 +54,12 @@ python3 -c "import glob, yaml; [yaml.safe_load(open(f)) for f in glob.glob('.git
 f=files/etc/ssh/sshd_config.d/00-halos.conf
 grep -qx 'PermitRootLogin no' "$f" || { echo "$f must say PermitRootLogin no" >&2; exit 1; }
 echo "ok: root can't log in over SSH"
+
+# Every workflow that publishes an image also signs it (#46).
+for f in .github/workflows/*.yml; do
+  code="$(grep -v '^[[:space:]]*#' "$f")"   # commands only, not comments
+  if grep -q 'podman push\|push-image.sh' <<< "$code" && ! grep -q 'sign-image.sh' <<< "$code"; then
+    echo "$f pushes images but doesn't sign them (scripts/sign-image.sh)" >&2; exit 1
+  fi
+done
+echo "ok: every workflow that pushes an image signs it"

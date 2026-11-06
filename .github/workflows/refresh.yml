@@ -15,6 +15,11 @@ jobs:
       fail-fast: false
       matrix:
         variant: [npu, no-npu]
+    # id-token: signing the rebuilt images with GitHub's identity (scripts/sign-image.sh).
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
     # Shared with release.yml's image job: one push moves an edition's channel tags at a time.
     concurrency:
       group: channel-tags-${{ matrix.variant }}
@@ -32,6 +37,7 @@ jobs:
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
           # main's channel script, kept aside: the release checked out next may predate it.
           cp scripts/channels.sh "$RUNNER_TEMP/channels.sh"
+          cp scripts/sign-image.sh "$RUNNER_TEMP/sign-image.sh"
       - if: steps.stable.outputs.tag != ''
         env:
           TAG: ${{ steps.stable.outputs.tag }}
@@ -56,3 +62,12 @@ jobs:
           echo "Moving the channels: $channels"
           # One channel per call, which the push script of older releases also accepts.
           for channel in $channels; do scripts/push-image.sh "$channel"; done
+          # Sign it and check every tag just pushed, with main's script (#46).
+          image="$(scripts/image-ref.sh)"; base="${image%:*}"
+          suffix=""; [ "$HALOGEN_VARIANT" = npu ] || suffix="-no-npu"
+          refs=("$image")
+          for channel in $channels; do
+            refs+=("$base:$channel$suffix")
+            [ "$channel" != stable ] || refs+=("$base:latest$suffix")
+          done
+          GITHUB_TOKEN="${{ secrets.GITHUB_TOKEN }}" bash "$RUNNER_TEMP/sign-image.sh" "${refs[@]}"

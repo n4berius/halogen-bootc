@@ -16,6 +16,11 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-24.04
+    # id-token: signing the pushed edge image with GitHub's identity (scripts/sign-image.sh).
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
     strategy:
       fail-fast: false
       matrix:
@@ -47,4 +52,6 @@ jobs:
         if: github.event_name != 'pull_request' && steps.changes.outputs.build == 'true'
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u "${{ github.actor }}" --password-stdin
-          podman push "$(scripts/image-ref.sh)" "$(scripts/image-ref.sh | sed 's/:[^:]*$//'):edge$([ "$HALOGEN_VARIANT" = npu ] || echo -no-npu)"
+          edge="$(scripts/image-ref.sh | sed 's/:[^:]*$//'):edge$([ "$HALOGEN_VARIANT" = npu ] || echo -no-npu)"
+          podman push "$(scripts/image-ref.sh)" "$edge"
+          GITHUB_TOKEN="${{ secrets.GITHUB_TOKEN }}" scripts/sign-image.sh "$edge"
