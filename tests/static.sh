@@ -42,12 +42,13 @@ for edition in ("npu", "no-npu"):
 assert "HALOGEN_DOWNLOAD" not in q.replace("# No download settings here", "")
 assert "@sha256" not in q and "Image=@HALOGEN_IMAGE@" in q
 # Halogen carries XRT from 0.19.1. A partial host XRT is refused, so mount none at all.
-assert not re.search(r"^Volume=.*(xilinx|libxrt)", n, re.M | re.I), "no XRT mounts: Halogen's image has its own"
+for unit in (q, n):
+    assert not re.search(r"^Volume=.*(xilinx|libxrt)", unit, re.M | re.I), "no XRT mounts: Halogen's image has its own"
 xml.dom.minidom.parse("files/usr/lib/firewalld/services/halogen.xml")
 pins = dict(l.strip().split("=", 1) for l in open("versions.env") if "=" in l and not l.startswith("#"))
 assert re.fullmatch(r"[0-9a-f]{40}", pins["HALOGEN_WEIGHTS_REVISION"]), "HALOGEN_WEIGHTS_REVISION must be a commit, not a branch"
 # Older Halogen images have no XRT of their own and need the host's.
-assert tuple(map(int, pins["HALOGEN_VERSION"].split("."))) >= (0, 19, 1), "Halogen before 0.19.1 needs the host's XRT"
+assert tuple(map(int, re.match(r"(\d+)\.(\d+)\.(\d+)", pins["HALOGEN_VERSION"]).groups())) >= (0, 19, 1), "Halogen before 0.19.1 needs the host's XRT"
 assert "DEBIAN_IMAGE" not in pins and "XRT_MIN_VERSION" not in pins
 print("static checks ok")
 P

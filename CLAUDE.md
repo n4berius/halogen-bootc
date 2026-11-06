@@ -102,8 +102,8 @@ name, but allows saying halOS runs Halogen.
 - `vm-login.py` types through QEMU `sendkey`. Any new character in a typed command needs a
   key mapping, or it is silently dropped.
 - Until 0.19.0 Halogen needed the host's XRT, which halOS took from Debian trixie-backports
-  and mounted at three paths. From 0.19.1 its image carries XRT 2.25 and refuses a partial host
-  mount, so halOS mounts none. `tests/static.sh` keeps it that way.
+  and mounted at three paths. From 0.19.1 its image carries XRT 2.25, so halOS mounts none (a
+  host mount must be all three libraries or none). `tests/static.sh` keeps it that way.
 - Halogen 0.18.x listened on IPv4 only, so we published `0.0.0.0:8731`. From 0.19.0 it listens
   on IPv6 too, and the port is published dual-stack.
 - `HALOGEN_AGENT_GUARD=watch|hold` makes Halogen add `halogen-spotter-0.6b` and `decider-4b`

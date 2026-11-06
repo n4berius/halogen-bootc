@@ -184,3 +184,16 @@ rm -rf "$work/models/npu" "$work/models/.fetch-stamp"
 [ -f "$work/models/npu/lfm3-vl/vis/v.hnpm" ] || { echo "its picture programs were not fetched" >&2; exit 1; }
 if [ -e "$work/models/npu/lfm3-vl/lfm3-vl.hnpw" ]; then echo "another model's weights were fetched" >&2; exit 1; fi
 ok "a checkpoint whose model has no download of its own gets the programs it reuses"
+
+# The fetch container gets the NPU device on the NPU edition only. XRT comes with Halogen's image.
+touch "$work/accel0"
+for variant in npu no-npu; do
+  sed -i '/^HALOGEN_VARIANT=/d' "$work/release.env"; echo "HALOGEN_VARIANT=$variant" >> "$work/release.env"
+  rm -f "$work/models/.fetch-stamp" "$work/last-run"
+  HALOGEN_NPU_DEVICE="$work/accel0" "$work/fetch" > "$work/out" 2>&1 || { cat "$work/out" >&2; exit 1; }
+  [ -s "$work/last-run" ] || { echo "no fetch container ran" >&2; exit 1; }
+  has=no; if grep -q -- "--device $work/accel0 --group-add keep-groups" "$work/last-run"; then has=yes; fi
+  [ "$has" = "$( [ "$variant" = npu ] && echo yes || echo no)" ] || { cat "$work/last-run" >&2; echo "$variant: NPU device passed=$has" >&2; exit 1; }
+  if grep -qi 'xilinx\|libxrt' "$work/last-run"; then echo "XRT was mounted" >&2; exit 1; fi
+done
+ok "the fetch passes the NPU device on the NPU edition only, and mounts no XRT"
