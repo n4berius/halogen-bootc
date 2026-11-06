@@ -100,6 +100,12 @@ if [ "$variant" = npu ]; then
   for f in decider LFM custom; do selftest_has "PASS folder-$f:"; done
 fi
 if grep -qE 'SELFTEST-LEAK|Bearer' "$out/selftest.txt"; then echo "selftest printed the API key" >&2; exit 1; fi
+# The login status (halos-status.timer): the console line and the SSH message's version lines.
+# The VM has no network, so the first download keeps retrying: the line must say so, which also
+# proves the sandboxed service can ask the halogen user's service manager.
+sed -n '/ISSUE-END/q;p' "$out/selftest.txt" | grep -qE '^halOS [^ ]+ \((npu|no-npu) edition\) - downloading models [0-9]+%' \
+  || { echo "the login status line is missing or wrong" >&2; exit 1; }
+grep -qE '^  Halogen: ' "$out/selftest.txt" || { echo "no version lines in the SSH message" >&2; exit 1; }
 echo "selftest verified"
 
 if [ -n "$luks" ]; then

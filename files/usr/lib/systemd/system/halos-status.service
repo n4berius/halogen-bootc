@@ -1,0 +1,33 @@
+[Unit]
+Description=halOS status on the login screen and in the SSH login message
+After=network-online.target user@970.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/libexec/halogen/login-status
+# Reads Halogen's state and writes only its own files under /run (made by tmpfiles.d/halos.conf).
+# Costs a few milliseconds every 30 s.
+RuntimeDirectory=halos
+RuntimeDirectoryPreserve=yes
+ProtectSystem=strict
+ReadWritePaths=/run/issue.d /run/motd.d -/run/agetty.reload
+# read-only, not yes: it reads the halogen user's service manager socket in /run/user/970.
+ProtectHome=read-only
+PrivateTmp=yes
+NoNewPrivileges=yes
+RestrictSUIDSGID=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+IPAddressDeny=any
+IPAddressAllow=localhost
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+SystemCallArchitectures=native
+LockPersonality=yes
+UMask=0022
+# Not "Starting / Finished" in the journal every 30 s.
+LogLevelMax=notice

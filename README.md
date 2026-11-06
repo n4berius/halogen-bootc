@@ -184,6 +184,10 @@ sudo halogenctl flash list   # the official Flash checkpoint and your own; flash
 [Your own NPU checkpoints](INSTALL.md#your-own-npu-checkpoints) and [your own Flash
 checkpoint](INSTALL.md#your-own-flash-checkpoint) explain `model` and `flash`.
 
+The machine's screen shows Halogen's state above the login prompt (downloading, starting, or
+`ready` with the address), and the SSH login message shows it too, with the release, channel and
+any staged update. The first time Halogen answers after a boot, logged-in users get a notice.
+
 `logs` and `fetch-logs` follow new lines in a terminal until you press Ctrl+C. Piped into
 `tail` or `grep`, or saved to a file, they print and stop.
 

@@ -58,6 +58,15 @@ name, but allows saying halOS runs Halogen.
   inside that image, and runs Halogen's `verify`. Then `halogen.service` starts read-only and
   offline. Each restart of `halogen.service` reruns the fetch, which only downloads what's
   missing or changed.
+- `halos-status.timer` runs `login-status` (root, sandboxed, writes only under `/run`) every 30 s:
+  one line in `/run/issue.d/50-halos.issue` for the console login screen (agetty's `\4` fills
+  in the IPv4 address; `agetty --reload` redraws on a change), the same with the hostname plus
+  `halosctl version`'s channel/staged/rollback lines (cached 10 min) in `/run/motd.d/50-halos`
+  for SSH, and one `wall` per boot when `/health` first answers. It reads as halogen with
+  `setpriv` and `systemctl --user` on `/run/user/970`, not `runuser` or `--machine=halogen@.host`:
+  both of those open a full PAM login (logind session, lastlog write, journal lines), far too much
+  every 30 s. When `/health` answers it asks nothing else. #43 part 2 (`halosctl setup`) is still
+  to come.
 - Settings: users edit `/srv/configs/halogen.env`. `render-config` keeps only the names in
   `options.allowed`, and `locked.env` wins over it. `halogenctl config` shows the result.
   `halogen.env` is copied once and never changed by halOS. `prepare` rewrites

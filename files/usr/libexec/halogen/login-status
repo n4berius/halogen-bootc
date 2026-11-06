@@ -1,0 +1,90 @@
+#!/bin/bash
+# halOS status for people at the machine: one line on the console login screen, the same line
+# plus the release in the SSH login message, and a one-time notice when Halogen first answers.
+# Runs as root every 30 s from halos-status.timer. It writes only its files under /run, and
+# reads as the halogen user (setpriv) without logging it in.
+#   console:  /run/issue.d/50-halos.issue (agetty shows /run/issue.d beside /etc/issue)
+#   SSH:      /run/motd.d/50-halos        (pam_motd shows /run/motd.d)
+set -uo pipefail
+release="${HALOGEN_RELEASE_FILE:-/usr/share/halogen/release.env}"
+models="${HALOGEN_MODELS_DIR:-/srv/models}"
+run="${HALOS_RUN_DIR:-/run}"
+port="${HALOGEN_API_PORT:-8731}"
+needed_gib="${HALOGEN_MODELS_NEEDED_GIB:-125}"
+# shellcheck source=/dev/null
+. "$release"
+state_dir="$run/halos"
+mkdir -p "$state_dir" "$run/issue.d" "$run/motd.d" || exit 1
+
+# Run as the halogen user without a login: no PAM session, no journal lines, no lastlog write.
+# (runuser and systemctl --machine both go through a full login, too much every 30 s.)
+uid="${HALOGEN_UID:-970}"
+as_halogen() { setpriv --reuid="$uid" --regid="$uid" --clear-groups -- "$@"; }
+health() { curl -s -m 3 -o /dev/null -w '%{http_code}' "http://127.0.0.1:$port/health" 2>/dev/null; }
+
+# What Halogen is doing, in the words the login screen shows. "ready" ends in agetty's \4,
+# which the console fills in with this machine's IPv4 address; the SSH message says the name.
+# When Halogen answers, that is all there is to know. Otherwise ask the halogen user's own
+# service manager about both units, through its socket in /run/user/970.
+fetch=""; server=""
+if [ "$(health)" = 200 ]; then
+  state=ready
+else
+  { read -r fetch; read -r server; } < <(as_halogen env XDG_RUNTIME_DIR="/run/user/$uid" \
+    systemctl --user is-active halogen-fetch.service halogen.service 2>/dev/null)
+fi
+if [ "${state:-}" = ready ]; then :
+elif [ "$fetch" = activating ]; then
+  # As halogen: root never looks inside the halogen user's folders (see prepare).
+  if as_halogen test -f "$models/.fetch-stamp"; then state="checking models"
+  else
+    have="$(as_halogen du -s --block-size=1G --exclude="$models/flash" "$models" 2>/dev/null | cut -f1)"
+    # A number only: this text came from another user's process.
+    [[ "$have" =~ ^[0-9]+$ ]] || have=0
+    pct=$(( have * 100 / needed_gib )); [ "$pct" -le 99 ] || pct=99
+    state="downloading models ${pct}%"
+  fi
+elif [ "$fetch" = failed ]; then state="download failed: sudo halogenctl fetch-logs"
+elif [ "$server" = active ] || [ "$server" = activating ] || [ "$server" = reloading ]; then state=starting
+elif [ -z "$server" ]; then state="starting up"
+else state="stopped: sudo halogenctl logs"
+fi
+
+name="halOS ${HALOS_RELEASE:-} (${HALOGEN_VARIANT:-} edition)"
+if [ "$state" = ready ]; then
+  console="$name - ready: http://\\4:$port/v1"
+  remote="$name - ready: http://$(hostname):$port/v1"
+else
+  console="$name - $state"; remote="$console"
+fi
+
+# Write a file only when its text changes, through a temporary file so a reader never sees half.
+put() {
+  [ "$(cat "$1" 2>/dev/null)" != "$2" ] || return 1
+  printf '%s\n' "$2" > "$1.new" && mv -f "$1.new" "$1"
+}
+if put "$run/issue.d/50-halos.issue" "$console"; then
+  # Redraw the login prompts already on screen, so the line is current without a keypress.
+  agetty --reload 2>/dev/null || true
+fi
+
+# The SSH message adds what halosctl version says (release, channel, staged update), refreshed
+# every 10 minutes because it asks bootc, and the free space for models.
+version="$state_dir/version"
+if [ ! -e "$version" ] || [ -n "$(find "$version" -mmin +10 2>/dev/null)" ]; then
+  { halosctl version 2>/dev/null || true; } | grep -E '^(Channel|Halogen|Next boot|Rollback):' > "$version.new"
+  mv -f "$version.new" "$version"
+fi
+free="$(df --output=avail --block-size=1G "$models" 2>/dev/null | tail -n 1 | tr -d ' ')"
+motd="$remote
+$(sed 's/^/  /' "$version")${free:+
+  Models:    ${free} GiB free in /srv/models}
+  More:      sudo halosctl version, sudo halogenctl status"
+put "$run/motd.d/50-halos" "$motd" || true
+
+# Tell logged-in terminals once per boot, the first time Halogen answers.
+if [ "$state" = ready ] && [ ! -e "$state_dir/announced" ]; then
+  : > "$state_dir/announced"
+  wall "halOS: Halogen is ready at http://$(hostname):$port/v1" 2>/dev/null || true
+fi
+exit 0
