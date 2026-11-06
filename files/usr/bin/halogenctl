@@ -2,6 +2,10 @@
 # Admin wrapper for the rootless Halogen service. Run with sudo.
 set -euo pipefail
 unit() { systemctl --user --machine=halogen@.host "$@"; }
+# Files under /srv/configs belong to halogen, so read and write them as halogen, never as root:
+# a link planted there then can't reach anything halogen couldn't already.
+as_owner() { runuser -u halogen -- "$@"; }
+configs="${HALOGEN_CONFIGS_DIR:-/srv/configs}"
 # logs and fetch-logs keep following only on a terminal, so `| tail` and `> file` finish.
 # An optional second argument sets how many lines to show (default 100).
 follow=(); [ ! -t 1 ] || follow=(-f)
@@ -31,18 +35,18 @@ case "${1:-status}" in
     [ "$(id -u)" = 0 ] || { echo "Run it with sudo: sudo halogenctl selftest" >&2; exit 1; }
     exec /usr/libexec/halogen/selftest
     ;;
-  api-key) cat /srv/configs/api-key; echo ;;
+  api-key) as_owner cat "$configs/api-key"; echo ;;
   hf-token)
     # Store a Hugging Face read token for model downloads. It is never printed.
-    token=/srv/configs/hf-token
-    if [ "${2:-}" = --remove ]; then rm -f "$token"; echo "Removed the Hugging Face token."; exit 0; fi
+    token="$configs/hf-token"
+    if [ "${2:-}" = --remove ]; then as_owner rm -f "$token"; echo "Removed the Hugging Face token."; exit 0; fi
     read -rsp "Hugging Face read token (from huggingface.co/settings/tokens): " value; echo
     case "$value" in
       hf_?*) ;;
       *) echo "That doesn't look like a token; they start with hf_. Nothing saved." >&2; exit 1 ;;
     esac
-    (umask 077; printf '%s\n' "$value" > "$token.new")
-    chown halogen:halogen "$token.new" && mv "$token.new" "$token"
+    # shellcheck disable=SC2016 # expanded by the halogen shell, from its arguments
+    printf '%s\n' "$value" | as_owner sh -c 'umask 077; cat > "$1.new" && mv -f "$1.new" "$1"' sh "$token"
     echo "Saved. The next download uses it: sudo halogenctl restart"
     ;;
   model)
@@ -60,19 +64,20 @@ case "${1:-status}" in
         echo
         echo "To serve it, add $entry to HALOGEN_NPU_MODELS in /srv/configs/halogen.env, for example:"
         if in_use "$path"; then echo "  It is already there. To use the new files: sudo halogenctl restart"; exit 0; fi
-        line="$(grep '^HALOGEN_NPU_MODELS=' /srv/configs/halogen.env | tail -n 1 || true)"
+        line="$(as_owner grep '^HALOGEN_NPU_MODELS=' "$configs/halogen.env" | tail -n 1 || true)"
         new="HALOGEN_NPU_MODELS=${line#HALOGEN_NPU_MODELS=}"; new="${new%,}"
         [ "$new" = HALOGEN_NPU_MODELS= ] && new="$new$path" || new="$new,$path"
         echo "  $new"
         if [ -t 0 ]; then
           read -rp "Make that change and restart Halogen now? [y/N] " answer
           if [ "$answer" = y ] || [ "$answer" = Y ]; then
-            if [ -n "$line" ]; then
-              n="$(grep -n '^HALOGEN_NPU_MODELS=' /srv/configs/halogen.env | tail -n 1 | cut -d: -f1)"
-              sed -i "${n}s|.*|$new|" /srv/configs/halogen.env
-            else
-              echo "$new" >> /srv/configs/halogen.env
-            fi
+            # Replace the last HALOGEN_NPU_MODELS line, or add one, as halogen. awk takes the new
+            # line as data (ENVIRON), so nothing in the file's old value can run as a command.
+            # shellcheck disable=SC2016 # expanded by the halogen shell and awk
+            NEW="$new" as_owner sh -c 'f=$1
+              n="$(grep -n "^HALOGEN_NPU_MODELS=" "$f" | tail -n 1 | cut -d: -f1)"
+              N="${n:-0}" awk '"'"'NR == ENVIRON["N"] { print ENVIRON["NEW"]; done = 1; next } { print }
+                END { if (!done) print ENVIRON["NEW"] }'"'"' "$f" > "$f.new" && mv -f "$f.new" "$f"' sh "$configs/halogen.env"
             unit restart halogen.service
             echo "Restarted. The first start converts the checkpoint for the NPU (about a minute)."
           fi

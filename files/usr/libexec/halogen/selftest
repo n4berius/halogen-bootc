@@ -26,6 +26,8 @@ say() {
 }
 have() { command -v "$1" > /dev/null 2>&1; }
 # Every outside command gets a time limit, so one stuck tool can't stop the report.
+# Files the halogen user owns are read as halogen, never as root (see prepare).
+as_owner() { runuser -u halogen -- "$@" 2>/dev/null; }
 run() { timeout "${HALOGEN_SELFTEST_TIMEOUT:-20}" "$@" 2>&1; }
 
 echo "halOS self-check, $(date -u '+%Y-%m-%d %H:%M UTC')"
@@ -202,7 +204,7 @@ if have curl; then
   if [ -r "$configs/api-key" ]; then
     # The key goes in a private file, so it never shows in the process list or the report.
     header="$(mktemp)"; trap 'rm -f "$header"' EXIT
-    printf 'Authorization: Bearer %s\n' "$(cat "$configs/api-key")" > "$header"
+    printf 'Authorization: Bearer %s\n' "$(as_owner cat "$configs/api-key")" > "$header"
     out="$(curl -sS -m 10 -H @"$header" "http://127.0.0.1:$port/v1/models" 2>/dev/null)"
     rm -f "$header"
     ids="$(printf '%s' "$out" | python3 -c 'import json,sys; print(" ".join(m["id"] for m in json.load(sys.stdin)["data"]))' 2>/dev/null)"
@@ -227,7 +229,8 @@ if [ "$npu" = 1 ]; then
   done
 fi
 meta="$models/.cache/huggingface/download/qwen38-flash-next-v2.hgn.metadata"
-[ ! -r "$meta" ] || say INFO weights "downloaded from weights commit $(head -n 1 "$meta" | cut -c1-12); pinned: ${HALOGEN_WEIGHTS_REVISION:-unknown}"
+# Read as halogen: the fetch container writes this folder, so a link there must not reach root's files.
+[ ! -r "$meta" ] || say INFO weights "downloaded from weights commit $(as_owner head -n 1 "$meta" | cut -c1-12); pinned: ${HALOGEN_WEIGHTS_REVISION:-unknown}"
 free="$(df --output=avail --block-size=1G "$models" 2>/dev/null | tail -n 1 | tr -d ' ')"
 [ -z "$free" ] || say INFO disk "${free} GiB free for models"
 

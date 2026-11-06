@@ -10,6 +10,8 @@ tests/next-tag.sh
 tests/needs-build.sh
 tests/first-boot.sh
 tests/fstab.sh
+tests/prepare.sh
+tests/halogenctl.sh
 tests/preflight.sh
 tests/halogen-update.sh
 tests/model-pull.sh
