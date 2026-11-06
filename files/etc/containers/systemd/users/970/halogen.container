@@ -16,6 +16,11 @@ AddDevice=/dev/kfd
 AddDevice=/dev/dri
 Ulimit=memlock=-1:-1
 PodmanArgs=--ipc=host --group-add=keep-groups
+# No capabilities and no setuid gains inside the container (security audit R2). Halogen's
+# entrypoint changes no owners or users, devices come through the halogen group, and memlock
+# comes from the rlimit above, not CAP_IPC_LOCK. The fetch containers already run this image so.
+DropCapability=all
+NoNewPrivileges=true
 # Your approved settings, then the locked ones from the read-only OS.
 EnvironmentFile=/run/user/970/halogen/effective.env
 EnvironmentFile=/usr/share/halogen/locked.env
