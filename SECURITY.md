@@ -16,15 +16,19 @@ untrusted input to Halogen. halOS limits what such a file can reach:
 - **Download.** It runs in Halogen's pinned image as the unprivileged `halogen` user, with no
   capabilities, and writes only into `/srv/models`.
 - **Only known files.** `flash pull` downloads only the files Halogen loads, by name, at an
-  exact commit, so no pickle or script comes along. `model pull` skips pickle and other
+  exact commit: the `.hgn` files, and the tokenizer's data files (`.json`, `.jinja`, `.txt`,
+  `.model`, `.tiktoken`). No pickle or script comes along. `model pull` skips pickle and other
   formats Halogen doesn't read.
-- **Checks before use.** Every Flash file must match the hash Hugging Face lists for it. It
-  must also pass Halogen's `verify`, which runs offline with no capabilities. `flash use`
-  refuses anything else, and the server falls back to the official checkpoint if the choice
-  is missing or unchecked.
+- **Checks before use.** Every Flash file must match the hash Hugging Face lists for it. The
+  `.hgn` files must also pass Halogen's `verify`, which runs offline with no capabilities.
+  `flash use` refuses anything else. A pull marks the folder unchecked until it passes, and
+  never replaces the checkpoint Halogen serves. The server falls back to the official
+  checkpoint if the choice is missing, unchecked or holds links.
 - **Serving.** Halogen serves read-only and offline, with no capabilities.
 
-`verify` checks that a file is well formed. It can't tell whether a model's answers are good or
-safe, and a checkpoint built to mislead still passes. Use checkpoints from people you trust, and
+`verify` checks that a `.hgn` file is well formed. It doesn't read the tokenizer or its chat
+template, which Halogen applies to every request; Halogen checks only that the template's
+thinking control works. It can't tell whether a model's answers are good or safe, and a
+checkpoint built to mislead still passes. Use checkpoints from people you trust, and
 compare their answers with the official model's before relying on them.
 

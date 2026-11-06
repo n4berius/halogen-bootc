@@ -16,10 +16,11 @@ flash_choice="$configs/flash-checkpoint"
 official=qwen38-flash-next-v2.hgn
 # The Flash checkpoint halogenctl flash use chose: official, or a name under /srv/models/flash.
 chosen_flash() {
-  local c; c="$(as_owner head -n 1 "$flash_choice" 2>/dev/null | tr -d '[:space:]')" || true
+  local c; c="$(as_owner head -n 1 "$flash_choice" 2>/dev/null | tr -cd 'A-Za-z0-9._-')" || true
   echo "${c:-official}"
 }
-flash_info() { as_owner sed -n "s/^$2=//p" "$models/flash/$1/halos.info" 2>/dev/null | tail -n 1; }
+# Printable characters only: the fetch containers can write in /srv/models.
+flash_info() { as_owner sed -n "s/^$2=//p" "$models/flash/$1/halos.info" 2>/dev/null | tail -n 1 | tr -cd '[:print:]'; }
 
 case "${1:-status}" in
   status)
@@ -99,7 +100,7 @@ case "${1:-status}" in
     # Your own Flash checkpoints under /srv/models/flash, beside the official one, which is
     # always kept so going back needs no download.
     as_halogen() { systemd-run --machine=halogen@.host --user --pipe --wait --quiet "$@"; }
-    valid() { case "$1" in *[!A-Za-z0-9._-]*|.*|'') return 1 ;; esac; }
+    valid() { case "$1" in [A-Za-z0-9]*) ;; *) return 1 ;; esac; case "$1" in *[!A-Za-z0-9._-]*) return 1 ;; esac; }
     restart_now() {
       # $1: what to say before asking. --yes skips the question.
       if [ "$yes" != 1 ]; then
@@ -115,8 +116,8 @@ case "${1:-status}" in
       pull)
         shift 2
         out="$(as_halogen /usr/libexec/halogen/flash-checkpoint pull "$@" | tee /dev/stderr)" || exit 1
-        name="$(sed -n 's/^name=//p' <<< "$out")"
-        [ -n "$name" ] || exit 1
+        name="$(sed -n 's/^name=//p' <<< "$out" | tail -n 1)"
+        valid "$name" || exit 1
         echo
         echo "To serve it: sudo halogenctl flash use $name"
         ;;

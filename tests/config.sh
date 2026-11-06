@@ -65,3 +65,11 @@ for bad in ../mine missing '.hidden' 'a b'; do
   [ "$(ck)" = /models/qwen38-flash-next-v2.hgn ] || { echo "'$bad' did not fall back to the official checkpoint" >&2; exit 1; }
 done
 echo "ok: the Flash checkpoint is the official one unless a verified one is chosen; vision follows its tower"
+
+# A link in a checkpoint folder could lead to a file that changed after it was checked.
+mkdir -p "$work/models/flash/linked"; printf 'checkpoint=model.hgn\nverified=pass\n' > "$work/models/flash/linked/halos.info"
+ln -s /etc/hostname "$work/models/flash/linked/model.hgn"; echo linked > "$work/flash-checkpoint"
+[ "$(ck)" = /models/qwen38-flash-next-v2.hgn ] || { echo "a linked checkpoint was used" >&2; exit 1; }
+grep -q 'holds links' "$work/log" || exit 1
+echo "ok: a checkpoint folder holding links falls back to the official checkpoint"
+

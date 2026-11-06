@@ -14,14 +14,17 @@ put() { mkdir -p "$(dirname "$work/repo/$1")"; printf '%s' "$2" > "$work/repo/$1
 listing() {
   echo "commit $commit"
   (cd "$work/repo" && find . -type f | sed 's|^\./||' | sort) | while read -r f; do
+    size="$(stat -c %s "$work/repo/$f")"
+    blob="$({ printf 'blob %d\0' "$size"; cat "$work/repo/$f"; } | sha1sum | cut -d' ' -f1)"
     case "$f" in *.hgn) sha="$(sha256sum "$work/repo/$f" | cut -d' ' -f1)" ;; *) sha=- ;; esac
-    echo "file $f $(stat -c %s "$work/repo/$f") $sha"
+    printf 'file\t%s\t%s\t%s\t%s\n' "$f" "$size" "$sha" "$blob"
   done
 }
 reset_repo() {
   rm -rf "$work/repo"; mkdir -p "$work/repo"
   put model.hgn checkpoint; put qwen38-flash-next-ngram.hgn table; put qwen38-flash-next-vision.hgn eyes
-  put tokenizer/tokenizer.json '{"custom": true}'; put README.md hello; put model.safetensors.bin pickle
+  put tokenizer/tokenizer.json '{"custom": true}'; put tokenizer/chat_template.jinja '{{ x }}'
+  put tokenizer/evil.py 'import os'; put README.md hello; put model.safetensors.bin pickle
 }
 
 cat > "$work/bin/podman" <<'S'
@@ -60,6 +63,7 @@ printf 'Avail\n%s\n' "${FAKE_FREE:-999999999999}"
 S
 chmod +x "$work/bin/podman" "$work/bin/df"
 printf 'HALOGEN_IMAGE=img@sha256:1\nHALOGEN_VERSION=9.9.9\nHALOGEN_VARIANT=no-npu\n' > "$work/release.env"
+export HALOGEN_FLASH_FILE="$work/flash-checkpoint"
 export PATH="$work/bin:$PATH" HALOGEN_RELEASE_FILE="$work/release.env" HALOGEN_MODELS_DIR="$work/models" \
   HALOGEN_HF_TOKEN_FILE="$work/none" HALOGEN_PROGRESS_S=0
 tool="$repo/files/usr/libexec/halogen/flash-checkpoint"
@@ -73,8 +77,8 @@ pull someone/My-Flash-HGN --as mine || fail "a good pull failed"
 d="$work/models/flash/mine"
 { [ "$(cat "$d/model.hgn")" = checkpoint ] && [ "$(cat "$d/qwen38-flash-next-ngram.hgn")" = table ]; } || fail "files missing"
 { [ -f "$d/qwen38-flash-next-vision.hgn" ] && grep -q custom "$d/tokenizer/tokenizer.json"; } || fail "vision or tokenizer missing"
-{ [ ! -e "$d/README.md" ] && [ ! -e "$d/model.safetensors.bin" ]; } || fail "files Halogen doesn't load were downloaded"
-grep -qx "hf $commit model.hgn qwen38-flash-next-vision.hgn tokenizer/tokenizer.json" "$work/hf.log" || fail "not fetched at the exact commit: $(cat "$work/hf.log")"
+{ [ ! -e "$d/README.md" ] && [ ! -e "$d/model.safetensors.bin" ] && [ ! -e "$d/tokenizer/evil.py" ]; } || fail "files Halogen doesn't load were downloaded"
+grep -qx "hf $commit model.hgn qwen38-flash-next-vision.hgn tokenizer/chat_template.jinja tokenizer/tokenizer.json" "$work/hf.log" || fail "not fetched at the exact commit: $(cat "$work/hf.log")"
 { [ "$(info mine repo)" = someone/My-Flash-HGN ] && [ "$(info mine commit)" = "$commit" ] && [ "$(info mine checkpoint)" = model.hgn ]; } || fail "info wrong"
 { [ "$(info mine verified)" = pass ] && [ "$(info mine verified_with)" = 9.9.9 ]; } || fail "verify not recorded"
 { grep -qx "verify /models/flash/mine/model.hgn" "$work/verify.log" && grep -q ngram "$work/verify.log"; } || fail "not every file verified"
@@ -138,3 +142,26 @@ FAKE_BAD=model.hgn "$tool" verify bad > "$work/out" 2>&1 && fail "verify of a ba
 { [ "$(info mine verified)" = pass ] && [ "$(grep -c . "$work/verify.log")" -ge 3 ]; } || fail "verify again did not check every file"
 "$tool" verify ../mine > "$work/out" 2>&1 && fail "verify took a path"
 ok "verify checks a pulled checkpoint again and records the answer"
+
+# Pulling again: never the one Halogen serves, and unchecked from the first byte until it passes.
+echo mine > "$work/flash-checkpoint"
+if pull someone/My-Flash-HGN --as mine; then fail "the served checkpoint was replaced"; fi
+grep -q 'Switch first' "$work/out" || fail "no explanation"
+echo official > "$work/flash-checkpoint"
+if FAKE_CORRUPT=model.hgn pull someone/My-Flash-HGN --as mine; then fail "a corrupt update was accepted"; fi
+[ "$(info mine verified)" = no ] || fail "a failed update left the old verified mark"
+pull someone/My-Flash-HGN --as mine || fail "a clean update failed"
+[ "$(info mine verified)" = pass ] || fail "a clean update was not marked verified"
+if FAKE_CORRUPT=tokenizer/tokenizer.json pull someone/My-Flash-HGN --as mine; then fail "a changed tokenizer file was accepted"; fi
+ok "pulling again never replaces the served checkpoint, and an update is unchecked until it passes"
+
+# Links are never checked or served, and an empty folder never passes.
+pull someone/My-Flash-HGN --as linked > /dev/null || fail "pull failed"
+rm "$work/models/flash/linked/model.hgn"; ln -s /etc/hostname "$work/models/flash/linked/model.hgn"
+if "$tool" verify linked > "$work/out" 2>&1; then fail "a link passed verify"; fi
+mkdir -p "$work/models/flash/empty"; printf 'repo=a/b\nverified=pass\n' > "$work/models/flash/empty/halos.info"
+if "$tool" verify empty > "$work/out" 2>&1; then fail "a folder with no checkpoint passed verify"; fi
+[ "$(info empty verified)" = fail ] || fail "the empty folder was not marked failed"
+for bad in -x _x; do if "$tool" pull someone/X --as "$bad" > "$work/out" 2>&1; then fail "the name $bad was accepted"; fi; done
+ok "links and empty folders fail verify, and names start with a letter or digit"
+

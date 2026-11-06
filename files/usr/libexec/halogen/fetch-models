@@ -68,7 +68,8 @@ if [ "$(cat "$stamp" 2>/dev/null)" = "$want" ]; then
   exit 0
 fi
 
-have_gib="$(du -s --block-size=1G "$models" 2>/dev/null | cut -f1)"
+# Your own Flash checkpoints don't count as room for this release's models.
+have_gib="$(du -s --block-size=1G --exclude="$models/flash" "$models" 2>/dev/null | cut -f1)"
 free_gib="$(df --output=avail --block-size=1G "$models" | tail -n 1 | tr -d ' ')"
 if [ "$((${free_gib:-0} + ${have_gib:-0}))" -lt "$needed_gib" ]; then
   echo "halogen-fetch: ${free_gib:-0} GiB free in $models; the models need about $needed_gib GiB" >&2
@@ -79,7 +80,7 @@ fi
 # (partial files included) every minute. 0 turns the report off.
 if [ "$progress_s" -gt 0 ]; then
   while sleep "$progress_s" > /dev/null 2>&1; do
-    echo "halogen-fetch: $(du -s --block-size=1G "$models" 2>/dev/null | cut -f1) GiB of about $needed_gib GiB downloaded"
+    echo "halogen-fetch: $(du -s --block-size=1G --exclude="$models/flash" "$models" 2>/dev/null | cut -f1) GiB of about $needed_gib GiB downloaded"
   done &
   reporter=$!
   trap 'kill "$reporter" 2>/dev/null' EXIT

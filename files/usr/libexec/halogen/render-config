@@ -58,6 +58,9 @@ case "$choice" in
       echo "halogen-config: $choice has not passed Halogen's verify; using the official one" >&2
     elif ! [[ "$file" =~ ^[A-Za-z0-9._-]+\.hgn$ ]] || [ ! -f "$models/flash/$choice/$file" ]; then
       echo "halogen-config: $choice is missing its checkpoint file; using the official one" >&2
+    elif [ -L "$models/flash/$choice" ] || [ -L "$info" ] || [ -L "$models/flash/$choice/$file" ]; then
+      # A link could lead to a file that changed after it was checked.
+      echo "halogen-config: $choice holds links, not its own files; using the official one" >&2
     else
       checkpoint="/models/flash/$choice/$file"
       # HALOGEN_VISION_TOWER=1 looks beside the checkpoint, and a missing tower stops Halogen.

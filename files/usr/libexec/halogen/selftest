@@ -237,10 +237,10 @@ else
     *) say FAIL folder-flash "$d has SELinux label $label, not container_file_t" ;; esac
 fi
 # Which Flash checkpoint Halogen serves (halogenctl flash use), read as halogen like the rest.
-flash="$(as_owner head -n 1 "$configs/flash-checkpoint" | tr -d '[:space:]')"
+flash="$(as_owner head -n 1 "$configs/flash-checkpoint" | tr -cd 'A-Za-z0-9._-')"
 if [ -z "$flash" ] || [ "$flash" = official ]; then say INFO flash "serving the official Flash checkpoint"
 else
-  from="$(as_owner sed -n 's/^repo=//p' "$models/flash/$flash/halos.info" | tail -n 1)"
+  from="$(as_owner sed -n 's/^repo=//p' "$models/flash/$flash/halos.info" | tail -n 1 | tr -cd '[:print:]' | cut -c1-100)"
   if [ "${running:-1}" = 1 ]; then say INFO flash "serving your own Flash checkpoint $flash${from:+ ($from)}"
   else say WARN flash "your own Flash checkpoint $flash is chosen and Halogen is not running. If it refused it (sudo halogenctl logs), go back: sudo halogenctl flash use official"; fi
 fi

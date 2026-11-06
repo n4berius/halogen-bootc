@@ -118,11 +118,12 @@ f systemd-run 'case "$*" in
 esac'
 fm="$work/fmodels"; mkdir -p "$fm/flash/mine" "$fm/flash/broken"
 printf 'repo=someone/Mine-HGN\ncommit=0123456789abcdef\ncheckpoint=model.hgn\nverified=pass\nverified_with=0.19.1\n' > "$fm/flash/mine/halos.info"
-printf 'repo=someone/Broken\ncheckpoint=model.hgn\nverified=fail\n' > "$fm/flash/broken/halos.info"
+printf 'repo=someone/Broken\033]0;owned\007\ncheckpoint=model.hgn\nverified=fail\n' > "$fm/flash/broken/halos.info"
 export HALOGEN_MODELS_DIR="$fm"
 "$ctl" flash list > "$work/out"
 if ! grep -qE '^  official +\S+ +yes ' "$work/out" || ! grep -qE '^  mine +\S+ +no +yes, with 0.19.1 +someone/Mine-HGN at 0123456789ab$' "$work/out" ||
    ! grep -qE '^  broken .* FAILED ' "$work/out"; then cat "$work/out" >&2; echo "flash list is wrong" >&2; exit 1; fi
+if grep -q $'\033' "$work/out"; then echo "flash list printed a terminal escape from halos.info" >&2; exit 1; fi
 if "$ctl" flash use mine < /dev/null > "$work/out" 2>&1; then echo "use switched without asking" >&2; exit 1; fi
 [ ! -e "$work/configs/flash-checkpoint" ] || { echo "a declined switch changed the setting" >&2; exit 1; }
 if "$ctl" flash use broken --yes > "$work/out" 2>&1; then echo "a checkpoint that failed verify was used" >&2; exit 1; fi
