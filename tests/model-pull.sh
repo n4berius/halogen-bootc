@@ -32,7 +32,7 @@ chmod +x "$work/bin/podman"
 printf 'model lfm3-1.7b repo=a\nmodel lfm3-1.7b-fast repo=a\nmodel d1-2b repo=b\n' > "$work/models.txt"
 printf 'HALOGEN_IMAGE=img@sha256:1\nHALOGEN_VARIANT=npu\n' > "$work/release.env"
 export PATH="$work/bin:$PATH" HALOGEN_RELEASE_FILE="$work/release.env" HALOGEN_MODELS_DIR="$work/models" \
-  HALOGEN_HF_TOKEN_FILE="$work/none" HALOGEN_XRT_DIR="$work/none" HALOGEN_PROGRESS_S=0
+  HALOGEN_HF_TOKEN_FILE="$work/none" HALOGEN_PROGRESS_S=0
 pull="$repo/files/usr/libexec/halogen/model-pull"
 ok() { echo "ok: $*"; }
 

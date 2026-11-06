@@ -35,8 +35,8 @@ name, but allows saying halOS runs Halogen.
 
 | Path | What it is |
 |---|---|
-| `versions.env` | Every pinned input: Fedora base, Halogen version, digest and source commit, upstream file hashes, weights repo and revision, Debian image, XRT minimum |
-| `Containerfile` | The OS image. XRT comes from Debian trixie-backports, because Halogen's container is Debian 13 |
+| `versions.env` | Every pinned input: Fedora base, Halogen version, digest and source commit, upstream file hashes, weights repo and revision, ISO builder |
+| `Containerfile` | The OS image. XRT is not in it: Halogen's image carries its own since 0.19.1 |
 | `Containerfile.installer`, `installer/` | The live installer image, Anaconda defaults (storage layout), branding and boot menu |
 | `files/` | Copied into both editions: systemd units, `halosctl`, `halogenctl`, `halogen-enroll-tpm`, `/usr/libexec/halogen/*` |
 | `variants/npu`, `variants/no-npu` | Per-edition kernel arguments, Quadlet drop-ins, the allowed-options list and default `halogen.env` |
@@ -101,6 +101,9 @@ name, but allows saying halOS runs Halogen.
 - In the VM test, `systemd-pcrextend` needs `SYSTEMD_FORCE_MEASURE=1` on non-UKI boots.
 - `vm-login.py` types through QEMU `sendkey`. Any new character in a typed command needs a
   key mapping, or it is silently dropped.
+- Until 0.19.0 Halogen needed the host's XRT, which halOS took from Debian trixie-backports
+  and mounted at three paths. From 0.19.1 its image carries XRT 2.25, so halOS mounts none (a
+  host mount must be all three libraries or none). `tests/static.sh` keeps it that way.
 - Halogen 0.18.x listened on IPv4 only, so we published `0.0.0.0:8731`. From 0.19.0 it listens
   on IPv6 too, and the port is published dual-stack.
 - `HALOGEN_AGENT_GUARD=watch|hold` makes Halogen add `halogen-spotter-0.6b` and `decider-4b`
@@ -108,7 +111,7 @@ name, but allows saying halOS runs Halogen.
 - `hf` is noisy and shows no progress in the journal. `fetch-in-container` filters it, and
   `fetch-models` logs the size downloaded every minute.
 - Own NPU checkpoints (`d1-2B`, `LFM3-*`) are named by path, need NPU programs fetched, and
-  are converted at first start. `halogen-npu probe` links XRT, so the fetch mounts it, but it
+  are converted at first start. `halogen-npu probe` links XRT (in Halogen's image since 0.19.1), but it
   needs no NPU device and only the checkpoint's config and tokenizer (checked against 0.19.0's
   image). Some of Halogen's models have no download of their own and reuse others' programs
   (`lfm3-omni-2b`, the `-fast` VL and Audio): check the model is known, not that it has a repo.

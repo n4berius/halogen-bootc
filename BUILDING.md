@@ -14,8 +14,7 @@ want to check those builds, change the image, or keep your own copy.
   sudo dnf install podman skopeo git xz
   ```
 - Root access through `sudo`. Building an installer needs root Podman.
-- About 40 GB of free disk space, and internet access to quay.io, ghcr.io and Debian's
-  mirrors.
+- About 40 GB of free disk space, and internet access to quay.io and ghcr.io.
 - Some patience: the first build downloads several GB of base images. Later builds reuse
   them.
 

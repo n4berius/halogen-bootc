@@ -14,7 +14,7 @@ Fedora packages change with each rebuild. For the exact list in a built image, r
 |---|---|---|---|
 | [halogen-flash-server](https://github.com/peonist-ai/halogen-flash-server) image and engine | 0.19.1, commit `47ceb43` | [halogen EULA](https://github.com/peonist-ai/halogen-flash-server/blob/main/LICENSE.md) | Unmodified. Pulled from `ghcr.io/peonist-ai/halogen-flash-server` by digest on first boot, and not included in the OS image or ISO |
 | `halogen-fabric-clock` | Same commit | halogen EULA | Unmodified copy in the NPU edition's OS image, checked by SHA-256 |
-| ROCm, Python and NPU components inside the Halogen image | See upstream | [Halogen's notices](https://github.com/peonist-ai/halogen-flash-server/blob/main/THIRD-PARTY-NOTICES.md) | Governed by Halogen's own notices |
+| ROCm, Python and NPU components inside the Halogen image, including AMD XRT (since 0.19.1) | See upstream | [Halogen's notices](https://github.com/peonist-ai/halogen-flash-server/blob/main/THIRD-PARTY-NOTICES.md) | Governed by Halogen's own notices |
 
 Both editions include Halogen's `LICENSE.md` and `THIRD-PARTY-NOTICES.md` at
 `/usr/share/licenses/halogen/`. This project is not made, endorsed or supported by Peonist,
@@ -39,7 +39,6 @@ Check these terms yourself before commercial use, especially for models you add.
 |---|---|---|---|
 | Fedora Linux 45 `fedora-bootc` base and RPM packages | [Fedora](https://fedoraproject.org/) | Various, per package | Texts are under `/usr/share/licenses` and `/usr/share/doc` |
 | `linux-firmware`, `amd-gpu-firmware` | Fedora | Various, including redistributable binary firmware | Terms are in the packages |
-| AMD XRT 2.25.0: `libxrt_coreutil`, `libxrt_core`, `libxrt_driver_xdna` | [Debian](https://tracker.debian.org/pkg/xrt) `trixie-backports`, from [AMD XRT](https://github.com/Xilinx/XRT) | Mainly Apache-2.0, with bundled parts under MIT, Expat, BSD-3-Clause and Khronos terms | NPU edition only. Debian's copyright file is at `/usr/share/licenses/halogen-xrt/copyright` |
 
 ## In the installer ISO
 
@@ -53,8 +52,7 @@ the USB drive and are not installed on the machine.
 | Dracut, Plymouth and other live environment packages | Per package |
 
 Both the OS image and the ISO are aggregates of separately licensed programs. Source for
-Fedora packages is available from [Fedora](https://src.fedoraproject.org/), and source for
-Debian's XRT packages from [Debian](https://tracker.debian.org/pkg/xrt).
+Fedora packages is available from [Fedora](https://src.fedoraproject.org/).
 
 ## Build tools
 

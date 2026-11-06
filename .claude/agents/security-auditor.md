@@ -38,7 +38,7 @@ recommendations.
 - `halogen-fabric-clock`, which writes GPU clock settings to sysfs as root.
 - Rootless Podman as the `halogen` user: user namespaces stay enabled, `/etc/subuid` and
   `/etc/subgid`, the file capabilities on `newuidmap`/`newgidmap`, and linger.
-- `container_file_t` labels on `/srv/models` and `/srv/configs`, the XRT bind mounts, and the
+- `container_file_t` labels on `/srv/models` and `/srv/configs`, and the
   writable own-checkpoint folders (`/srv/models/decider`, `LFM`, `custom`), where Halogen keeps
   its NPU conversions.
 - Network access during the fetch step (`halogen-fetch`), which downloads about 130 GB.
