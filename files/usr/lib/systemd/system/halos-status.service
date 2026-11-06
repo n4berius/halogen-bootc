@@ -11,7 +11,8 @@ RuntimeDirectory=halos
 RuntimeDirectoryPreserve=yes
 ProtectSystem=strict
 ReadWritePaths=/run/issue.d /run/motd.d -/run/agetty.reload
-ProtectHome=yes
+# read-only, not yes: it reads the halogen user's service manager socket in /run/user/970.
+ProtectHome=read-only
 PrivateTmp=yes
 NoNewPrivileges=yes
 RestrictSUIDSGID=yes
@@ -28,3 +29,5 @@ RestrictRealtime=yes
 SystemCallArchitectures=native
 LockPersonality=yes
 UMask=0022
+# Not "Starting / Finished" in the journal every 30 s.
+LogLevelMax=notice
