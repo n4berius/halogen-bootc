@@ -9,12 +9,12 @@ mkdir -p "$work/bin" "$work/state" "$work/configs" "$work/dev"
 export FAKE="$work"
 f() { printf '#!/bin/bash\n%s\n' "$2" > "$work/bin/$1"; chmod +x "$work/bin/$1"; }
 f id 'echo 0'
-f runuser 'echo "runuser $*" >> "$FAKE/log"; [ "$1 $2 $3" = "-u halogen --" ] || exit 9; shift 3; exec "$@"'
+f runuser 'echo "runuser $*" >> "$FAKE/log"; [ "$1 $2 $3" = "-u halogen --" ] || exit 9; shift 3; FAKE_AS=halogen exec "$@"'
 f lsblk 'printf "%s\n" "${FAKE_LSBLK-/dev/nvme0n1p3 crypto_LUKS}"'
 f cryptsetup 'printf "Tokens:\n%s" "${FAKE_TOKENS:-}"'
 f halogen-enroll-tpm 'echo "enroll-tpm" >> "$FAKE/log"'
 f halogenctl 'echo "halogenctl $*" >> "$FAKE/log"'
-f nano 'echo "nano $*" >> "$FAKE/log"'
+f nano 'echo "nano $* as=${FAKE_AS:-root}" >> "$FAKE/log"; echo "HALOGEN_KV_SLOTS=2" >> "$1"'
 printf 'HALOGEN_VARIANT=no-npu\n' > "$work/release.env"
 export PATH="$work/bin:$PATH" HALOGEN_RELEASE_FILE="$work/release.env" HALOGEN_STATE_DIR="$work/state" HALOGEN_CONFIGS_DIR="$work/configs" HALOGEN_DEV="$work/dev"
 ctl="$repo/files/usr/bin/halosctl"
@@ -37,7 +37,13 @@ FAKE_TOKENS='  0: systemd-tpm2' answer y y
 grep -q 'unlocks with the TPM already' "$work/out" || { cat "$work/out" >&2; exit 1; }
 if grep -q enroll-tpm "$work/log"; then echo "enrolled again" >&2; exit 1; fi
 grep -qx 'halogenctl hf-token' "$work/log" || { echo "no token step" >&2; exit 1; }
-grep -q "runuser -u halogen -- nano $work/configs/halogen.env" "$work/log" || { echo "the editor didn't run as halogen" >&2; exit 1; }
+echo 'HALOGEN_FLASH_CTX=1' > "$work/configs/halogen.env"
+touch "$work/state/setup-pending"; : > "$work/log"
+FAKE_TOKENS='  0: systemd-tpm2' answer n y
+if ! grep -qE '^nano /tmp/.*/halogen.env as=root$' "$work/log"; then cat "$work/log" >&2; echo "the editor didn't run as root on a private copy" >&2; exit 1; fi
+if grep -q "nano $work/configs" "$work/log"; then echo "the editor opened halogen's file directly" >&2; exit 1; fi
+grep -qx 'HALOGEN_KV_SLOTS=2' "$work/configs/halogen.env" || { echo "the edit was not saved" >&2; exit 1; }
+grep -q "runuser -u halogen -- sh -c" "$work/log" || { echo "the edit was not written back as halogen" >&2; exit 1; }
 FAKE_LSBLK='' answer n n
 grep -q "isn't encrypted" "$work/out" || exit 1
 ok "setup knows an existing TPM binding and an unencrypted disk, and edits settings as halogen"

@@ -246,9 +246,20 @@ case "$cmd" in
     echo; echo "3. Settings"
     echo "   Halogen's defaults suit most people. Every option, with what it does: sudo halogenctl options"
     if ask "   Open /srv/configs/halogen.env in an editor now? [y/N]" n; then
-      editor="${EDITOR:-nano}"; command -v "$editor" > /dev/null || editor="vi"
-      as_halogen "$editor" "$configs/halogen.env" || true
-      echo "   What Halogen will get: sudo halogenctl config"
+      # As sudoedit does: root edits a private copy, and the copy goes back as halogen. Nothing of
+      # halogen's (its home, an editor startup file) runs on root's terminal, and root never
+      # opens halogen's files itself.
+      editor="$(command -v "${EDITOR:-nano}" || command -v vi || true)"
+      [ -n "$editor" ] || die "no editor found; edit it with: sudo halogenctl options, then the file"
+      tmp="$(mktemp -d)"; trap 'rm -rf "$tmp"' EXIT
+      as_halogen cat "$configs/halogen.env" > "$tmp/halogen.env" || die "could not read $configs/halogen.env"
+      cp "$tmp/halogen.env" "$tmp/before"
+      if "$editor" "$tmp/halogen.env" && ! cmp -s "$tmp/before" "$tmp/halogen.env"; then
+        # shellcheck disable=SC2016 # expanded by the halogen shell, from its arguments
+        as_halogen sh -c 'umask 027; cat > "$1.new" && mv -f "$1.new" "$1"' sh "$configs/halogen.env" < "$tmp/halogen.env"
+        echo "   Saved. What Halogen will get: sudo halogenctl config"
+      else echo "   No change."; fi
+      rm -rf "$tmp"; trap - EXIT
     else echo "   Kept the defaults."; fi
 
     echo
