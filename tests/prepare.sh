@@ -34,6 +34,7 @@ key="$(cat "$work/configs/api-key")"; "$prepare"
 rm "$work/configs/api-key" "$work/configs/halogen.env"
 ln -s "$work/outside/stolen-key" "$work/configs/api-key"; ln -s "$work/outside/stolen-env" "$work/configs/halogen.env"
 "$prepare"
-[ ! -e "$work/outside/stolen-key" ] && [ ! -e "$work/outside/stolen-env" ] \
-  || { echo "prepare followed a link planted in /srv/configs" >&2; exit 1; }
+if [ -e "$work/outside/stolen-key" ] || [ -e "$work/outside/stolen-env" ]; then
+  echo "prepare followed a link planted in /srv/configs" >&2; exit 1
+fi
 ok "it keeps the API key on later boots and never follows a link where a file should be"

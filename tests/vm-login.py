@@ -73,6 +73,7 @@ typed("{ echo RESULT-START; cat /proc/cmdline; dmesg | grep -i secure; bootctl s
       "systemctl status user@970.service --no-pager | head -4; journalctl --no-pager -n 8 -o cat _SYSTEMD_USER_UNIT=halogen-fetch.service; systemctl --failed --no-legend --no-pager; "
       "systemctl is-active firewalld halogen-prepare; halosctl version; ls /etc/ssh/sshd_config.d; sshd -T | grep -i permitrootlogin; journalctl -b -o cat -u bootc-fstab-edit; "
       # Security audit P1: a link planted in /srv/models must not let root hand its target to halogen.
+      # Only the NPU edition makes model folders, so on no-NPU this passes without testing much.
       "mkdir -p -m 755 /var/tmp/victim; mv /var/srv/models/custom /var/srv/models/custom.x; ln -s /var/tmp/victim /var/srv/models/custom; "
       "systemctl restart halogen-prepare; ls -ld /var/tmp/victim; rm /var/srv/models/custom; mv /var/srv/models/custom.x /var/srv/models/custom; "
       "systemctl restart halogen-prepare; echo RESULT-END; } > /dev/ttyS0 2>&1\n")

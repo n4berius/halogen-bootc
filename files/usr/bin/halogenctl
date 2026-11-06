@@ -2,7 +2,7 @@
 # Admin wrapper for the rootless Halogen service. Run with sudo.
 set -euo pipefail
 unit() { systemctl --user --machine=halogen@.host "$@"; }
-# Files under /srv/configs belong to halogen, so read and write them as halogen, never as root:
+# Files under /srv/configs and /srv/models belong to halogen, so read and write them as halogen, never as root:
 # a link planted there then can't reach anything halogen couldn't already.
 as_owner() { runuser -u halogen -- "$@"; }
 configs="${HALOGEN_CONFIGS_DIR:-/srv/configs}"
@@ -51,7 +51,7 @@ case "${1:-status}" in
     ;;
   model)
     # Your own NPU checkpoints under /srv/models/{decider,LFM,custom}.
-    models=/srv/models
+    models="${HALOGEN_MODELS_DIR:-/srv/models}"
     as_halogen() { systemd-run --machine=halogen@.host --user --pipe --wait --quiet "$@"; }
     in_use() { as_halogen /usr/libexec/halogen/render-config --show 2>/dev/null | grep '^HALOGEN_NPU_MODELS=' | tr '=,' '\n' | sed 's/:fast$//' | grep -qxF -- "$1"; }
     case "${2:-list}" in
@@ -74,7 +74,7 @@ case "${1:-status}" in
             # Replace the last HALOGEN_NPU_MODELS line, or add one, as halogen. awk takes the new
             # line as data (ENVIRON), so nothing in the file's old value can run as a command.
             # shellcheck disable=SC2016 # expanded by the halogen shell and awk
-            NEW="$new" as_owner sh -c 'f=$1
+            NEW="$new" as_owner sh -c 'umask 027; f=$1
               n="$(grep -n "^HALOGEN_NPU_MODELS=" "$f" | tail -n 1 | cut -d: -f1)"
               N="${n:-0}" awk '"'"'NR == ENVIRON["N"] { print ENVIRON["NEW"]; done = 1; next } { print }
                 END { if (!done) print ENVIRON["NEW"] }'"'"' "$f" > "$f.new" && mv -f "$f.new" "$f"' sh "$configs/halogen.env"
@@ -89,7 +89,7 @@ case "${1:-status}" in
           [ -d "$dir" ] || continue
           dir="${dir%/}"; rel="${dir#"$models"/}"
           used=no; ! in_use "/models/$rel" || used=yes
-          printf '%-28s %-8s %-8s %s\n' "$(basename "$dir")" "${rel%%/*}" "$(du -sh "$dir" | cut -f1)" "$used"
+          printf '%-28s %-8s %-8s %s\n' "$(basename "$dir")" "${rel%%/*}" "$(as_owner du -sh "$dir" | cut -f1)" "$used"
         done
         echo "Halogen's own NPU models: $(find "$models/npu" -mindepth 1 -maxdepth 1 -type d -printf '%f ' 2>/dev/null)"
         ;;
@@ -108,9 +108,10 @@ case "${1:-status}" in
           echo "$name is in HALOGEN_NPU_MODELS. Take it out of /srv/configs/halogen.env first." >&2; exit 1
         fi
         [ -t 0 ] || { echo "Run this in a terminal: it asks before deleting." >&2; exit 1; }
-        read -rp "Delete $dir ($(du -sh "$dir" | cut -f1))? [y/N] " answer
+        read -rp "Delete $dir ($(as_owner du -sh "$dir" | cut -f1))? [y/N] " answer
         [ "$answer" = y ] || [ "$answer" = Y ] || exit 0
-        rm -rf -- "$dir" && echo "Deleted $name."
+        # As halogen: a folder link planted by a container must not let root delete through it.
+        as_owner rm -rf -- "$dir" && echo "Deleted $name."
         ;;
       *) echo "usage: halogenctl model pull <hf-repo> [--revision <rev>] [--as <name>] | list | remove <name>" >&2; exit 2 ;;
     esac

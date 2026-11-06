@@ -34,6 +34,7 @@ ok "the API key and HF token are read and written as halogen"
 
 # The audit's reproduction: a HALOGEN_NPU_MODELS value built to run a command through sed's e flag.
 printf 'HALOGEN_FLASH_CTX=1\nHALOGEN_NPU_MODELS=a touch %s/pwned|e;#\n' "$work" > "$work/configs/halogen.env"
+chmod 0640 "$work/configs/halogen.env"
 : > "$work/log"
 printf 'y\n' > "$work/answer"
 { sleep 2; cat "$work/answer"; } | script -qec "$ctl model pull LiquidAI/LFM3-1.7B" /dev/null > "$work/out" 2>&1 || true
@@ -41,6 +42,7 @@ printf 'y\n' > "$work/answer"
 grep -qx 'HALOGEN_NPU_MODELS=a touch .*pwned|e;#,/models/LFM/LFM3-1.7B' "$work/configs/halogen.env" \
   || { echo "the new model was not added as plain text:" >&2; cat "$work/configs/halogen.env" "$work/out" >&2; exit 1; }
 grep -qx 'HALOGEN_FLASH_CTX=1' "$work/configs/halogen.env" || { echo "other settings were lost" >&2; exit 1; }
+[ "$(stat -c %a "$work/configs/halogen.env")" = 640 ] || { echo "halogen.env lost its 0640 mode" >&2; exit 1; }
 grep -q 'runuser -u halogen -- sh -c' "$work/log" || { echo "halogen.env was not edited as halogen" >&2; exit 1; }
 grep -q 'systemctl --user --machine=halogen@.host restart halogen.service' "$work/log"
 ok "model pull edits halogen.env as halogen, and a crafted value stays plain text"
@@ -50,3 +52,11 @@ printf 'HALOGEN_FLASH_CTX=1\n' > "$work/configs/halogen.env"
 [ "$(tail -n 1 "$work/configs/halogen.env")" = 'HALOGEN_NPU_MODELS=/models/LFM/LFM3-1.7B' ] \
   || { echo "no HALOGEN_NPU_MODELS line was added:" >&2; cat "$work/configs/halogen.env" >&2; exit 1; }
 ok "model pull adds HALOGEN_NPU_MODELS when the file has none"
+
+# model remove deletes as halogen, so a folder link planted by a container can't steer root's rm.
+mkdir -p "$work/models/LFM/old-model"; echo w > "$work/models/LFM/old-model/x"
+: > "$work/log"
+{ sleep 2; echo y; } | HALOGEN_MODELS_DIR="$work/models" script -qec "$ctl model remove old-model" /dev/null > "$work/out" 2>&1 || true
+[ ! -e "$work/models/LFM/old-model" ] || { echo "model remove didn't delete:" >&2; cat "$work/out" >&2; exit 1; }
+grep -q "runuser -u halogen -- rm -rf -- $work/models/LFM/old-model" "$work/log" || { echo "model remove deleted as root" >&2; exit 1; }
+ok "model remove deletes as halogen"
