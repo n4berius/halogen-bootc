@@ -120,7 +120,8 @@ sudo dd if=halos-flash-v0.19.0-alpha.1-npu.iso of=/dev/sdX bs=4M status=progress
 3. Under **Installation Destination**, choose the disk and keep **Automatic** storage. It
    creates LVM volumes with XFS for `/`, `/var`, `/var/log`, `/var/log/audit`, `/var/home`,
    `/var/srv/configs` and `/var/srv/models`, which takes the rest of the disk. **Custom** lets
-   you change this, but keep at least 150 GiB for `/var/srv/models`.
+   you change this, but keep at least 150 GiB for `/var/srv/models`, and about 110 GB more for
+   each [Flash checkpoint of your own](#your-own-flash-checkpoint).
 4. Tick **Encrypt my data** if you want LUKS, and set a passphrase.
 5. Create your administrator account, and make sure it has admin rights.
 6. Start the install. It copies the OS from the ISO, so it needs no network here.
@@ -258,6 +259,64 @@ These three folders are the only ones the server can write to, so it can keep th
 Use `model pull` to fill them: a folder copied in by hand as root is read-only for the server,
 which then converts it again at every start.
 
+### Your own Flash checkpoint
+
+Both editions can serve another build of the Flash model in place of the official one: a
+community conversion, or your own fine-tune or quantization in Halogen's `.hgn` format. The
+official checkpoint always stays downloaded, so going back is one command and downloads
+nothing.
+
+```bash
+sudo halogenctl flash pull someone/Some-Flash-HGN --revision <commit> --as mine
+sudo halogenctl flash list               # official and yours: size, which is active, verified
+sudo halogenctl flash use mine           # switch; asks first, then restarts Halogen
+sudo halogenctl flash use official       # back to the official checkpoint
+sudo halogenctl flash verify mine        # run Halogen's verify again, after a Halogen update
+sudo halogenctl flash remove mine
+```
+
+What `flash pull` does:
+
+- **One exact version.** It asks Hugging Face which commit `--revision` (a branch, tag or
+  commit; `main` if you leave it out) points to, downloads that commit, and records it.
+  `flash list` shows it.
+- **Only what Halogen loads.** That's the `.hgn` checkpoint, its quality sidecar if it has
+  one, the vision tower, and `tokenizer/`. The lookup table (`qwen38-flash-next-ngram.hgn`,
+  about 48 GB) is fetched only when the checkpoint doesn't carry its own; Halogen's server
+  says which. Nothing else in the repository is downloaded, so there's no Python pickle or
+  script to run.
+- **Several checkpoints.** If the repository holds more than one `.hgn` checkpoint, choose one
+  with `--file <name>.hgn`.
+- **No tokenizer.** If the repository has none, it copies in the official tokenizer.
+- **Room first.** It checks the free space before the first byte. A custom checkpoint
+  typically needs 60 to 110 GB, on top of the official model's 110 GB.
+- **Checked twice.** Every file must match the hash Hugging Face lists for it, and must pass
+  Halogen's own [`verify`](https://github.com/peonist-ai/halogen-flash-server/blob/main/docs/checkpoint-tools.md).
+  `flash use` refuses a checkpoint that failed or wasn't checked.
+- **Resumes.** An interrupted download resumes when you run the same command again.
+- **Your token.** It uses your Hugging Face token if you saved one; gated and private
+  repositories need it.
+
+Downloads and checks are read from disk while Halogen keeps serving, which can slow long
+prompts a little until they finish.
+
+Things to know:
+
+- **Quality is yours to judge.** `verify` proves the file is well formed, not that its answers
+  are good. Compare it with the official model on your own prompts before you rely on it.
+- **Halogen may refuse it at start,** for example if its chat template's thinking control
+  doesn't work ([`HALOGEN_TEMPLATE_UNCHECKED`](https://github.com/peonist-ai/halogen-flash-server/blob/main/docs/FLAGS.md))
+  or it needs more memory than is free. `sudo halogenctl status` and the selftest then say so,
+  and `sudo halogenctl flash use official` brings the official model back.
+- **Images.** With `HALOGEN_VISION_TOWER=1`, images work only if the checkpoint's repository
+  has a vision tower (`qwen38-flash-next-vision.hgn`). Without one, images stay off and
+  `halogenctl config` says why.
+- **Not yet:** GGUF repositories (Halogen can convert them, but `flash pull` doesn't do that
+  yet), and a perplexity comparison against the official model on request.
+- **Where things live.** Checkpoints live in `/srv/models/flash/<name>/`. The choice is
+  `/srv/configs/flash-checkpoint`, which only `halogenctl flash use` writes, and
+  `HALOGEN_CHECKPOINT` can't be set in `halogen.env`.
+
 ## 8. Optional: unlock LUKS with the TPM
 
 If you chose LUKS, you can avoid typing the passphrase at each boot:
@@ -284,6 +343,7 @@ hardware yet. If the next boot still asks for the passphrase, report it.
 | `/dev/accel/accel0` is missing | Use the NPU edition, and check the IOMMU and firmware |
 | Fabric clock is not held | `systemctl status halogen-fabric-clock` |
 | Halogen stays down after a config edit | `sudo halogenctl status`, then check the NPU model names |
+| Halogen stays down after `flash use` | `sudo halogenctl logs` says why; `sudo halogenctl flash use official` goes back |
 | Start hangs, or GTT stays in use after a crash | Reboot, as Halogen's troubleshooting guide explains |
 
 For anything else, see Halogen's

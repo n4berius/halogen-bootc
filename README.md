@@ -79,9 +79,10 @@ download the models.
 | Location | Contents | Changes through |
 |---|---|---|
 | OS image | Kernel arguments, services, firewall, Halogen digest | Rebuild and `bootc upgrade` |
-| `/srv/configs` | `halogen.env` (yours), `halogen.env.example` (every option, refreshed each boot), `api-key` | Edit `halogen.env` on the machine |
+| `/srv/configs` | `halogen.env` (yours), `halogen.env.example` (every option, refreshed each boot), `api-key`, `flash-checkpoint` (which Flash checkpoint is served) | Edit `halogen.env` on the machine |
 | `/usr/share/halogen` | Locked settings and the allowed-option list | Rebuild only, read-only |
 | `/srv/models` | Flash weights and NPU models, about 125 GB, on their own volume | Fetched on first boot |
+| `/srv/models/flash` | Your own Flash checkpoints, about 60 to 110 GB each | `sudo halogenctl flash pull` ([how](INSTALL.md#your-own-flash-checkpoint)) |
 | BIOS | UMA frame buffer at its explicit minimum, not Auto; newest firmware | Set by hand |
 
 ## Editions
@@ -157,7 +158,9 @@ at every boot; copy a line from it into `halogen.env`. Each release on GitHub al
 for each edition attached (`halos-flash-<version>-<edition>-halogen.env.example`).
 
 See [`docs/FLAGS.md`](https://github.com/peonist-ai/halogen-flash-server/blob/main/docs/FLAGS.md)
-for what each option does and how options interact.
+for what each option does and how options interact. Which Flash checkpoint Halogen loads
+(`HALOGEN_CHECKPOINT`) isn't set here: `sudo halogenctl flash use` chooses it, from the official
+checkpoint and the ones you downloaded and checked.
 
 To change what is allowed or locked, edit `files/usr/share/halogen/locked.env` or `BLOCKED` in
 `scripts/gen-options.py`, run that script on the new `docs/FLAGS.md`, and rebuild.
@@ -173,7 +176,13 @@ sudo halogenctl restart      # after editing /srv/configs/halogen.env
 sudo halogenctl config       # show the settings in effect
 sudo halogenctl api-key      # print the API key
 sudo halogenctl hf-token     # save a Hugging Face token for faster model downloads
+sudo halogenctl selftest     # the hardware checklist; prints nothing private
+sudo halogenctl model list   # your own NPU checkpoints (NPU edition)
+sudo halogenctl flash list   # the official Flash checkpoint and your own; flash use switches
 ```
+
+[Your own NPU checkpoints](INSTALL.md#your-own-npu-checkpoints) and [your own Flash
+checkpoint](INSTALL.md#your-own-flash-checkpoint) explain `model` and `flash`.
 
 `logs` and `fetch-logs` follow new lines in a terminal until you press Ctrl+C. Piped into
 `tail` or `grep`, or saved to a file, they print and stop.
@@ -215,6 +224,12 @@ the single folder (the 0.18.23 releases and earlier) downloads all its NPU model
 15 GB.
 
 ## Choices worth knowing
+
+- **The official Flash checkpoint is always kept.** A [checkpoint of your
+  own](INSTALL.md#your-own-flash-checkpoint) sits beside it, so going back never waits for a
+  110 GB download. Only a checkpoint that matches its repository's hashes and passes Halogen's
+  `verify` can be chosen. After a Halogen update, `sudo halogenctl flash verify <name>` checks
+  it again with the new version.
 
 - **XRT comes with Halogen.** Since 0.19.1 Halogen's image carries AMD's XRT 2.25 with its
   NPU plugin, so halOS installs and mounts none ([Halogen's NPU host

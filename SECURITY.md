@@ -6,3 +6,25 @@ on this repository's Security tab.
 Report vulnerabilities in Halogen itself to its maintainers, as its documentation describes.
 
 Only the newest stable release, and the newest pre-release of each channel, get fixes.
+
+## Checkpoints you download
+
+`halogenctl model pull` (NPU checkpoints) and `halogenctl flash pull` (Flash checkpoints) bring
+weights from Hugging Face repositories that neither halOS nor Peonist checks. Treat them as
+untrusted input to Halogen. halOS limits what such a file can reach:
+
+- **Download.** It runs in Halogen's pinned image as the unprivileged `halogen` user, with no
+  capabilities, and writes only into `/srv/models`.
+- **Only known files.** `flash pull` downloads only the files Halogen loads, by name, at an
+  exact commit, so no pickle or script comes along. `model pull` skips pickle and other
+  formats Halogen doesn't read.
+- **Checks before use.** Every Flash file must match the hash Hugging Face lists for it. It
+  must also pass Halogen's `verify`, which runs offline with no capabilities. `flash use`
+  refuses anything else, and the server falls back to the official checkpoint if the choice
+  is missing or unchecked.
+- **Serving.** Halogen serves read-only and offline, with no capabilities.
+
+`verify` checks that a file is well formed. It can't tell whether a model's answers are good or
+safe, and a checkpoint built to mislead still passes. Use checkpoints from people you trust, and
+compare their answers with the official model's before relying on them.
+
