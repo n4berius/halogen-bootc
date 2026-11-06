@@ -35,6 +35,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          persist-credentials: false
           fetch-depth: 0
       - name: Run checks
         run: tests/run.sh
@@ -56,8 +57,10 @@ jobs:
       - name: Push
         # Only main publishes edge; its signature names main (scripts/sign-image.sh).
         if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && steps.changes.outputs.build == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | podman login ghcr.io -u "${{ github.actor }}" --password-stdin
+          echo "$GH_TOKEN" | podman login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
           edge="$(scripts/image-ref.sh | sed 's/:[^:]*$//'):edge$([ "$HALOGEN_VARIANT" = npu ] || echo -no-npu)"
           podman push "$(scripts/image-ref.sh)" "$edge"
-          GITHUB_TOKEN="${{ secrets.GITHUB_TOKEN }}" scripts/sign-image.sh "$edge"
+          GITHUB_TOKEN="$GH_TOKEN" scripts/sign-image.sh "$edge"

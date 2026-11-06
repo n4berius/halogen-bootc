@@ -77,6 +77,11 @@ grep -qix 'permitrootlogin no' "$out/report.txt" || { echo "sshd allows root log
 # Security audit P1: root's prepare must not chown or chmod a root folder through a planted link.
 grep -qE '^drwxr-xr-x\.? +[0-9]+ root +root .*/var/tmp/victim' "$out/report.txt" \
   || { echo "halogen-prepare changed a root-owned folder through a link" >&2; grep victim "$out/report.txt" >&2; exit 1; }
+# No-cost hardening (security audit R5, R7) is active on the installed system.
+for want in 'kernel.dmesg_restrict = 1' 'kernel.kptr_restrict = 1' 'kernel.yama.ptrace_scope = 1'; do
+  grep -qx "$want" "$out/report.txt" || { echo "sysctl not applied: $want" >&2; exit 1; }
+done
+grep -qix 'x11forwarding no' "$out/report.txt" || { echo "sshd still allows X11 forwarding" >&2; exit 1; }
 echo "installed system verified"
 
 # halogenctl selftest, as people run it on hardware. Only what a VM can pass is required.
