@@ -15,7 +15,7 @@ promoted.
 - **"API ready" at a glance.** The login screen shows Halogen's state: downloading with a
   percentage, checking, starting, or `ready` with the address. The SSH login message shows the
   same, with the release, channel and any staged update. Logged-in users get a one-time notice
-  when Halogen first answers after a boot. (#43, part 1)
+  when Halogen first answers after a boot. (#63)
 
 ## v0.19.1-alpha.2 (2026-11-06)
 
