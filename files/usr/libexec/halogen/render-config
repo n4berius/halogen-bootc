@@ -1,9 +1,14 @@
 #!/bin/bash
 # Build the settings Halogen receives from /srv/configs/halogen.env. Only options this
 # image allows pass through, so a typo or a locked setting cannot reach the server.
+# The Flash checkpoint comes from /srv/configs/flash-checkpoint, which only halogenctl flash use
+# writes: the official one, or a checkpoint flash pull downloaded and Halogen's verify passed.
 # Prints the path of the result. With --show, prints its contents instead.
 set -uo pipefail
 config="${HALOGEN_CONFIG_FILE:-/srv/configs/halogen.env}"
+flash_choice="${HALOGEN_FLASH_FILE:-/srv/configs/flash-checkpoint}"
+models="${HALOGEN_MODELS_DIR:-/srv/models}"
+official=/models/qwen38-flash-next-v2.hgn
 allowed="${HALOGEN_ALLOWED_FILE:-/usr/share/halogen/options.allowed}"
 runtime="${XDG_RUNTIME_DIR:-/run/user/970}/halogen"
 output="$runtime/effective.env"
@@ -36,6 +41,33 @@ if [ -r "$config" ]; then
 else
   echo "halogen-config: cannot read $config, so Halogen uses its defaults" >&2
 fi
+
+# Which Flash checkpoint. Anything unexpected falls back to the official one, so Halogen starts.
+checkpoint="$official"
+choice="$(head -n 1 "$flash_choice" 2>/dev/null | tr -d '[:space:]')"
+case "$choice" in
+  ''|official) ;;
+  *[!A-Za-z0-9._-]*|.*) echo "halogen-config: $flash_choice names '$choice', which is not a checkpoint name; using the official one" >&2 ;;
+  *)
+    info="$models/flash/$choice/halos.info"
+    file="$(sed -n 's/^checkpoint=//p' "$info" 2>/dev/null | tail -n 1)"
+    verified="$(sed -n 's/^verified=//p' "$info" 2>/dev/null | tail -n 1)"
+    if [ ! -f "$info" ]; then
+      echo "halogen-config: no checkpoint called $choice in $models/flash; using the official one" >&2
+    elif [ "$verified" != pass ]; then
+      echo "halogen-config: $choice has not passed Halogen's verify; using the official one" >&2
+    elif ! [[ "$file" =~ ^[A-Za-z0-9._-]+\.hgn$ ]] || [ ! -f "$models/flash/$choice/$file" ]; then
+      echo "halogen-config: $choice is missing its checkpoint file; using the official one" >&2
+    else
+      checkpoint="/models/flash/$choice/$file"
+      # HALOGEN_VISION_TOWER=1 looks beside the checkpoint, and a missing tower stops Halogen.
+      if [ -n "${values[HALOGEN_VISION_TOWER]:-}" ] && [ ! -f "$models/flash/$choice/qwen38-flash-next-vision.hgn" ]; then
+        ignore HALOGEN_VISION_TOWER "$choice has no vision tower, so images stay off"
+        unset 'values[HALOGEN_VISION_TOWER]'
+      fi
+    fi ;;
+esac
+values[HALOGEN_CHECKPOINT]="$checkpoint"
 
 tmp="$output.new"
 : > "$tmp" || exit 1

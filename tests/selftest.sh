@@ -19,7 +19,7 @@ echo "ASUS" > "$work/sys/class/dmi/id/board_vendor"; echo "board" > "$work/sys/c
 echo "1.02" > "$work/sys/class/dmi/id/bios_version"
 echo up > "$work/sys/class/net/enp1s0/operstate"; echo 5000 > "$work/sys/class/net/enp1s0/speed"
 touch "$work/dev/kfd" "$work/dev/dri/renderD128" "$work/dev/accel/accel0" "$work/dev/tpmrm0"
-mkdir -p "$work/models/decider" "$work/models/LFM" "$work/models/custom"; touch "$work/models/.fetch-stamp"
+mkdir -p "$work/models/flash" "$work/models/decider" "$work/models/LFM" "$work/models/custom"; touch "$work/models/.fetch-stamp"
 echo 'SECRET-KEY-MARKER' > "$work/configs/api-key"; echo 'hf_SECRET-TOKEN-MARKER' > "$work/configs/hf-token"
 printf 'MemTotal: 130000000 kB\n' > "$work/meminfo"
 echo 'BOOT_IMAGE=x amdgpu.gttsize=126976 ttm.pages_limit=32505856 iommu=pt' > "$work/cmdline"
@@ -57,7 +57,7 @@ refuse() { if grep -qE "$1" "$work/out"; then echo "did not expect '$1' in:" >&2
 
 "$selftest" > "$work/out" 2>&1 || { cat "$work/out" >&2; echo "a healthy machine failed" >&2; exit 1; }
 for id in secure-boot kernel-iommu memory selinux-denials firewall luks-tpm gpu-kfd npu-device npu-label \
-  fabric-clock server preflight api-ipv4 api-ipv6 api-models npu-folder folder-LFM; do
+  fabric-clock server preflight api-ipv4 api-ipv6 api-models npu-folder folder-LFM folder-flash; do
   expect "^PASS $id:"
 done
 expect '^Summary: [0-9]+ passed, 0 warnings, 0 failed'
@@ -132,3 +132,18 @@ expect '^FAIL server:.*download and check step failed.*fetch-logs'
 FAKE_STATE=deactivating "$selftest" > "$work/out" 2>&1 || true
 expect '^WARN server:.*deactivating'
 ok "Halogen waiting for the fetch, or stopping, is a warning; a failed fetch or a stopped Halogen says what to do"
+
+# The Flash checkpoint: named when it is your own, with the way back when Halogen isn't running.
+"$selftest" > "$work/out" 2>&1 || true
+expect '^INFO flash: serving the official Flash checkpoint'
+mkdir -p "$work/models/flash/mine"; printf 'repo=someone/Mine-HGN\n' > "$work/models/flash/mine/halos.info"
+echo mine > "$work/configs/flash-checkpoint"
+"$selftest" > "$work/out" 2>&1 || true
+expect '^INFO flash: serving your own Flash checkpoint mine \(someone/Mine-HGN\)'
+FAKE_STATE=failed "$selftest" > "$work/out" 2>&1 || true
+expect '^WARN flash: .*mine.*sudo halogenctl flash use official'
+grep -q "runuser -u halogen -- head -n 1 $work/configs/flash-checkpoint" "$work/runuser.log" || { echo "the choice was read as root" >&2; exit 1; }
+rm -r "$work/models/flash" "$work/configs/flash-checkpoint"
+"$selftest" > "$work/out" 2>&1 || true
+expect '^FAIL folder-flash: '
+ok "the Flash folder is checked, and the served checkpoint is named, with the way back when Halogen is down"
