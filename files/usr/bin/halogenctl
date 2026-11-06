@@ -30,6 +30,31 @@ case "${1:-status}" in
     echo "--- locked ---"
     grep -v '^#' /usr/share/halogen/locked.env
     ;;
+  options)
+    # Every option this release offers (the edition's template), and whether halogen.env has it.
+    # --new: only the ones halogen.env doesn't mention yet, set or commented.
+    template="${HALOGEN_ENV_TEMPLATE:-/usr/share/halogen/halogen.env.default}"
+    mine="$( { as_owner grep -oE '^#?[[:space:]]*HALOGEN_[A-Z0-9_]+=' "$configs/halogen.env" 2>/dev/null || true; } | tr -d '#= \t' | sort -u | tr '\n' ' ')"
+    set_now="$( { as_owner grep -oE '^HALOGEN_[A-Z0-9_]+=' "$configs/halogen.env" 2>/dev/null || true; } | tr -d '=' | sort -u | tr '\n' ' ')"
+    awk -v only_new="$([ "${2:-}" = --new ] && echo 1 || echo 0)" -v mine="$mine" -v set_now="$set_now" '
+      BEGIN { n = split(mine, a, " "); for (i = 1; i <= n; i++) have[a[i]] = 1
+              n = split(set_now, b, " "); for (i = 1; i <= n; i++) on[b[i]] = 1 }
+      /^## / { section = substr($0, 4); next }
+      /^# / { desc = substr($0, 3); next }
+      match($0, /^#?HALOGEN_[A-Z0-9_]+=/) {
+        name = substr($0, RSTART, RLENGTH); gsub(/[#=]/, "", name)
+        state = (name in on) ? "set" : (name in have) ? "commented" : "new"
+        if (!only_new || state == "new") {
+          if (section != shown) { printf "\n%s\n", section; shown = section }
+          printf "  %-34s %-10s %s\n", name, state, desc; count++
+        }
+        desc = ""; next
+      }
+      END {
+        if (only_new && !count) print "Nothing new: halogen.env mentions every option this release offers."
+        else printf "\nset: in effect from halogen.env. commented: in the file, switched off. new: not in your file yet.\nCopy a line from /srv/configs/halogen.env.example into halogen.env, then: sudo halogenctl restart\n"
+      }' "$template"
+    ;;
   selftest)
     # The beta checklist in one go. It changes nothing and prints nothing private.
     [ "$(id -u)" = 0 ] || { echo "Run it with sudo: sudo halogenctl selftest" >&2; exit 1; }
@@ -116,5 +141,5 @@ case "${1:-status}" in
       *) echo "usage: halogenctl model pull <hf-repo> [--revision <rev>] [--as <name>] | list | remove <name>" >&2; exit 2 ;;
     esac
     ;;
-  *) echo "usage: halogenctl status|start|stop|restart|logs [lines]|fetch-logs [lines]|doctor|selftest|config|api-key|hf-token [--remove]|model pull|list|remove" >&2; exit 2 ;;
+  *) echo "usage: halogenctl status|start|stop|restart|logs [lines]|fetch-logs [lines]|doctor|selftest|config|options [--new]|api-key|hf-token [--remove]|model pull|list|remove" >&2; exit 2 ;;
 esac

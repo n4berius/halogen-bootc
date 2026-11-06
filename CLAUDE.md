@@ -59,6 +59,10 @@ name, but allows saying halOS runs Halogen.
   missing or changed.
 - Settings: users edit `/srv/configs/halogen.env`. `render-config` keeps only the names in
   `options.allowed`, and `locked.env` wins over it. `halogenctl config` shows the result.
+  `halogen.env` is copied once and never changed by halOS. `prepare` rewrites
+  `/srv/configs/halogen.env.example` (the edition's template) at every boot, `halogenctl options
+  [--new]` lists every option as set, commented or new, and each release attaches both editions'
+  templates as `halos-flash-<tag>-<edition>-halogen.env.example`.
 - NPU models live in `/srv/models/npu/<model>`, with no version folder. Their files are
   checked against the hashes in the pinned image's `/opt/halogen/npu/models.txt`, so an
   upgrade downloads only what changed. Old `npu/<version>/` folders are moved across by

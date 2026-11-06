@@ -60,3 +60,20 @@ mkdir -p "$work/models/LFM/old-model"; echo w > "$work/models/LFM/old-model/x"
 [ ! -e "$work/models/LFM/old-model" ] || { echo "model remove didn't delete:" >&2; cat "$work/out" >&2; exit 1; }
 grep -q "runuser -u halogen -- rm -rf -- $work/models/LFM/old-model" "$work/log" || { echo "model remove deleted as root" >&2; exit 1; }
 ok "model remove deletes as halogen"
+
+# options: every option this release offers, and which ones halogen.env doesn't mention yet.
+template="$repo/variants/npu/usr/share/halogen/halogen.env.default"
+grep -v -e '^#HALOGEN_KV8=' -e '^#HALOGEN_ACCESS_LOG=' "$template" | sed 's/^#HALOGEN_MTP_GATE_P=$/HALOGEN_MTP_GATE_P=0.8/' > "$work/configs/halogen.env"
+HALOGEN_ENV_TEMPLATE="$template" "$ctl" options --new > "$work/out"
+if [ "$(grep -c '^  HALOGEN_' "$work/out")" != 2 ] || ! grep -qE '^  HALOGEN_KV8 +new +.' "$work/out" ||
+   ! grep -qE '^  HALOGEN_ACCESS_LOG +new ' "$work/out"; then
+  cat "$work/out" >&2; echo "options --new should list exactly the two missing options" >&2; exit 1
+fi
+HALOGEN_ENV_TEMPLATE="$template" "$ctl" options > "$work/out"
+if ! grep -qE '^  HALOGEN_MTP_GATE_P +set ' "$work/out" || ! grep -qE '^  HALOGEN_MTP_DEPTH +commented ' "$work/out"; then
+  cat "$work/out" >&2; echo "options should mark set and commented" >&2; exit 1
+fi
+[ "$(grep -c '^  HALOGEN_' "$work/out")" = "$(grep -cE '^#?HALOGEN_' "$template")" ] || { echo "options missed some" >&2; exit 1; }
+cp "$template" "$work/configs/halogen.env"
+HALOGEN_ENV_TEMPLATE="$template" "$ctl" options --new | grep -q '^Nothing new' || { echo "a complete file still had new options" >&2; exit 1; }
+ok "options lists every option as set, commented or new, and --new only the missing ones"

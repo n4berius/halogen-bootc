@@ -196,6 +196,11 @@ jobs:
           PRERELEASE: ${{ needs.info.outputs.prerelease }}
           TAG: ${{ needs.info.outputs.tag }}
         run: |
+          # Every option each edition offers, to read before upgrading (also on the machine as
+          # /srv/configs/halogen.env.example, and listed by sudo halogenctl options).
+          for edition in npu no-npu; do
+            cp "variants/$edition/usr/share/halogen/halogen.env.default" "assets/halos-flash-$TAG-$edition-halogen.env.example"
+          done
           flags=(--generate-notes --verify-tag --title "$TAG")
           [ "$PRERELEASE" = false ] || flags+=(--prerelease --latest=false)
           gh release create "$TAG" "${flags[@]}" assets/*

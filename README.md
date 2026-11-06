@@ -79,7 +79,7 @@ download the models.
 | Location | Contents | Changes through |
 |---|---|---|
 | OS image | Kernel arguments, XRT, services, firewall, Halogen digest | Rebuild and `bootc upgrade` |
-| `/srv/configs` | `halogen.env` with every allowed option, `api-key` | Edit on the machine |
+| `/srv/configs` | `halogen.env` (yours), `halogen.env.example` (every option, refreshed each boot), `api-key` | Edit `halogen.env` on the machine |
 | `/usr/share/halogen` | Locked settings and the allowed-option list | Rebuild only, read-only |
 | `/srv/models` | Flash weights and NPU models, about 125 GB, on their own volume | Fetched on first boot |
 | BIOS | UMA frame buffer at its explicit minimum, not Auto; newest firmware | Set by hand |
@@ -145,8 +145,16 @@ sudo halogenctl config    # what is in effect, and the locked settings
 Only listed options reach Halogen. Typos and locked settings are ignored and logged, so they
 cannot change the server or stop it. The file is read as plain settings and never run as a
 script. Locked values live in `/usr/share/halogen/locked.env`, on the read-only OS, and
-upgrades keep your file. New options in a later release appear in
-`/usr/share/halogen/halogen.env.default`.
+upgrades keep your file exactly as it is. To see what a newer Halogen added:
+
+```bash
+sudo halogenctl options --new   # options your halogen.env doesn't mention yet, with what they do
+sudo halogenctl options         # every option: set, commented, or new
+```
+
+`/srv/configs/halogen.env.example` always holds the full list for the release you run, rewritten
+at every boot; copy a line from it into `halogen.env`. Each release on GitHub also has the list
+for each edition attached (`halos-flash-<version>-<edition>-halogen.env.example`).
 
 See [`docs/FLAGS.md`](https://github.com/peonist-ai/halogen-flash-server/blob/main/docs/FLAGS.md)
 for what each option does and how options interact.
