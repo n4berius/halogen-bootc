@@ -65,8 +65,13 @@ name, but allows saying halOS runs Halogen.
   for SSH, and one `wall` per boot when `/health` first answers. It reads as halogen with
   `setpriv` and `systemctl --user` on `/run/user/970`, not `runuser` or `--machine=halogen@.host`:
   both of those open a full PAM login (logind session, lastlog write, journal lines), far too much
-  every 30 s. When `/health` answers it asks nothing else. #43 part 2 (`halosctl setup`) is still
-  to come.
+  every 30 s. When `/health` answers it asks nothing else. Before setup it says "waiting for setup".
+- First-boot setup (#43): `prepare` touches `/var/lib/halogen/setup-pending` only when
+  `halogen.env` doesn't exist yet (a new install, never an upgrade). `fetch-models` waits while it
+  exists, up to `HALOGEN_SETUP_WAIT_S` (1800 s by its mtime), then removes it and starts with the
+  defaults. `sudo halosctl setup` asks TPM unlock (`halogen-enroll-tpm`), HF token (`halogenctl
+  hf-token`), and editing `halogen.env` (as halogen), then removes the marker; `--skip` removes it
+  at once. The VM test checks the pending line, then skips.
 - Settings: users edit `/srv/configs/halogen.env`. `render-config` keeps only the names in
   `options.allowed`, and `locked.env` wins over it. `halogenctl config` shows the result.
   `halogen.env` is copied once and never changed by halOS. `prepare` rewrites

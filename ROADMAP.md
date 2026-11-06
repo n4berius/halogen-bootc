@@ -26,8 +26,8 @@ In this order. Each ships as an alpha, then is promoted to beta once tested.
 
 1. **Machines refuse unsigned images** (#46, phase 2). Images are signed since `v0.19.0-alpha.5`.
    Until machines check the signature, it protects nothing.
-2. **First-boot setup and an "API ready" line on the login screen** (#43). Today nothing tells a
-   new owner when the 130 GB first download is done.
+2. **First-boot setup and an "API ready" line on the login screen** (#43). Both done: the login
+   status (#63), then `halosctl setup`.
 3. **Guided installer** (#42). It picks the disk, asks only for encryption, root and the admin user,
    and uses fixed `halos-*` volume names.
 4. **A full security audit** of the whole image, not just of single changes.

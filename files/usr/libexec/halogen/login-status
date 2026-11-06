@@ -11,6 +11,7 @@ models="${HALOGEN_MODELS_DIR:-/srv/models}"
 run="${HALOS_RUN_DIR:-/run}"
 port="${HALOGEN_API_PORT:-8731}"
 needed_gib="${HALOGEN_MODELS_NEEDED_GIB:-125}"
+halogen_state="${HALOGEN_STATE_DIR:-/var/lib/halogen}"
 # shellcheck source=/dev/null
 . "$release"
 state_dir="$run/halos"
@@ -34,6 +35,7 @@ else
     systemctl --user is-active halogen-fetch.service halogen.service 2>/dev/null)
 fi
 if [ "${state:-}" = ready ]; then :
+elif as_halogen test -e "$halogen_state/setup-pending"; then state="waiting for setup: sudo halosctl setup"
 elif [ "$fetch" = activating ]; then
   # As halogen: root never looks inside the halogen user's folders (see prepare).
   if as_halogen test -f "$models/.fetch-stamp"; then state="checking models"

@@ -72,3 +72,10 @@ FAKE_FETCH=activating FAKE_HAVE='a[$(touch $FAKE/pwned)]' run
 expect "$issue" 'downloading models 0%'
 grep -q "setpriv --reuid=970 --regid=970 --clear-groups -- test -f $work/models/.fetch-stamp" "$work/log" || { echo "the stamp was checked as root" >&2; exit 1; }
 ok "du's output is used only as a number, and the stamp is checked as halogen"
+
+# A new install waits for first-boot setup, and the line says how to do it.
+mkdir -p "$work/state"; touch "$work/state/setup-pending"
+FAKE_FETCH=activating HALOGEN_STATE_DIR="$work/state" run
+expect "$issue" '- waiting for setup: sudo halosctl setup'
+ok "a new install's line says to run setup"
+

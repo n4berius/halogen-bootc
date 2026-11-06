@@ -93,6 +93,11 @@ report = log.split("RESULT-START")[-1].split("RESULT-END")[0]
 # The same self-check people run on hardware. A VM has no GPU, so some checks fail here;
 # iso-install.sh checks the ones a VM can pass.
 # The real API key is compared inside the VM (grep -f never prints it); only a marker leaves.
+# A new install waits for first-boot setup: the login line says so, then --skip starts the download.
+typed("cat /run/issue.d/50-halos.issue > /dev/ttyS0; echo SETUP-WAIT-END > /dev/ttyS0; "
+      "halosctl setup --skip > /dev/ttyS0 2>&1; sleep 45; echo SETUP-SKIPPED > /dev/ttyS0\n")
+log = wait_serial("SETUP-SKIPPED", 180)
+(out / "setup.txt").write_text(log.split("RESULT-END")[-1].split("SETUP-SKIPPED")[0])
 typed("halogenctl selftest > /tmp/st 2>&1; rc=$?; cat /tmp/st > /dev/ttyS0; "
       "grep -qF -f /srv/configs/api-key /tmp/st && echo SELFTEST-LEAK > /dev/ttyS0; "
       "cat /run/issue.d/50-halos.issue > /dev/ttyS0; echo ISSUE-END > /dev/ttyS0; "

@@ -101,6 +101,9 @@ if [ "$variant" = npu ]; then
 fi
 if grep -qE 'SELFTEST-LEAK|Bearer' "$out/selftest.txt"; then echo "selftest printed the API key" >&2; exit 1; fi
 # The login status (halos-status.timer): the console line and the SSH message's version lines.
+# A new install first waits for setup; halosctl setup --skip then starts the download.
+grep -q 'waiting for setup: sudo halosctl setup' "$out/setup.txt" || { cat "$out/setup.txt" >&2; echo "the line didn't say setup is pending" >&2; exit 1; }
+grep -q 'first download' "$out/setup.txt" || { echo "setup --skip didn't release the download" >&2; exit 1; }
 # The VM has no network, so the first download keeps retrying: the line must say so, which also
 # proves the sandboxed service can ask the halogen user's service manager.
 sed -n '/ISSUE-END/q;p' "$out/selftest.txt" | grep -qE '^halOS [^ ]+ \((npu|no-npu) edition\) - downloading models [0-9]+%' \
