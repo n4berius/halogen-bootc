@@ -41,6 +41,7 @@ name, but allows saying halOS runs Halogen.
 | `files/` | Copied into both editions: systemd units, `halosctl`, `halogenctl`, `halogen-enroll-tpm`, `/usr/libexec/halogen/*` (`flash-checkpoint` and `model-pull` download your own checkpoints) |
 | `variants/npu`, `variants/no-npu` | Per-edition kernel arguments, Quadlet drop-ins, the allowed-options list and default `halogen.env` |
 | `scripts/` | `build.sh`, `build-iso.sh`, `package-iso.sh` (single-file release ISO), `release-info.sh`, `gen-options.py` (options from upstream `FLAGS.md`), `halogen-update.sh` (pins a new Halogen release), `size-report.sh`, `channels.sh` (which channel tags a release moves), `next-tag.sh` (the next release tag), `push-image.sh`, `sign-image.sh` (cosign signing) |
+| `CHANGELOG.md`, `ROADMAP.md` | What each release changed (PRs add to Unreleased), and the order of the work ahead |
 | `tests/` | `run.sh` (fast checks, no GPU or network), `iso-install.sh` + `vm-login.py` (QEMU install test) |
 | `.claude/agents/` | Subagents: `code-reviewer` (QA review before merge) and `security-auditor` (audit, zero-cost hardening ideas). Both only read and report |
 | `.github/workflows/` | `build.yml` (image, edge tag; also weekly, Thursday 05:37 UTC), `iso.yml` (ISO + VM install test), `release.yml`, `refresh.yml` (weekly rebuild of stable), `halogen-update.yml` (daily: opens a PR for a new Halogen release) |
@@ -145,16 +146,20 @@ name, but allows saying halOS runs Halogen.
 ## Where the work stands
 
 Open issues are the source of truth, prioritised with the `priority: high/medium/low` labels
-and tracked on the owner's project board. When this file was last updated (after
-`v0.19.0-beta.1`):
+and tracked on the owner's project board. [ROADMAP.md](ROADMAP.md) holds the order and
+[CHANGELOG.md](CHANGELOG.md) what each release changed. When this file was last updated (after
+`v0.19.1-alpha.2`):
 
-- Released: `v0.19.0-beta.1`, promoted from alpha.4. Freyja passed the beta checklist (#25,
-  closed): TPM unlock, `halosctl` switch, upgrade and rollback keeping `/srv`, selftest 30/30.
-- Before RC, in this order: image signing (#46; phase 1 signs every push, phase 2 ships the
-  machine-side policy in a later release), first-boot setup and "API ready" banner (#43), the
-  guided installer with fixed `halos-*` volume names (#42), and a full `security-auditor` pass.
-- Later: `halosctl` steps 2 and 3 (#40), a benchmark command (#15), tab completion (#14), unlock
-  over SSH (#13) and clevis/tang (#44).
+- Released: `v0.19.1-alpha.2`, to be promoted to `v0.19.1-beta.1` after a few days on freyja. It has
+  the security hardening (#51 to #53), the options list (#57), Halogen 0.19.1 with its own XRT
+  (#58, #59) and custom Flash checkpoints (#60). Freyja runs `unsloth-iq4` with `flash use`, at about
+  the official model's speed.
+- Before RC, in this order: machines refuse unsigned images (#46 phase 2), first-boot setup and
+  "API ready" banner (#43), the guided installer with fixed `halos-*` volume names (#42), and a
+  full `security-auditor` pass.
+- Before stable: benchmark command (#15), `flash check` (#56), `halosctl npu on|off` (#40, trimmed
+  to that), tab completion (#14). After stable: unlock over SSH (#13), clevis/tang (#44), GGUF in
+  `flash pull` (#61).
 - Known upstream: bootc 1.17.1 rewrites `/etc/fstab` at every boot on Anaconda installs
   (bootc-dev/bootc#2592); `bootc-fstab-edit.service.d/10-halos.conf` skips it. `bootc switch` to
   the ref a machine already follows does nothing; use `bootc upgrade`.
@@ -166,6 +171,11 @@ The owner's test machine is "freyja": an AMD Ryzen AI Halo Developer Platform (1
 
 Use plain, specific messages that explain why. PR descriptions have a summary and a test plan
 with checkboxes, and say whether real hardware was involved.
+
+Every PR that changes what users get adds a plain-language line under **Unreleased** in
+`CHANGELOG.md`, with its PR number. After the owner releases, the next PR moves those lines under
+the new version's heading (the release workflow numbers releases, so the version isn't known
+before). Keep `ROADMAP.md` in step when an issue is done, added or reordered.
 
 Before asking the owner to merge a PR, run the `code-reviewer` subagent on it and fix or answer
 what it finds. Run `security-auditor` too when the change touches services, permissions, the
