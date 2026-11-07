@@ -68,7 +68,7 @@ own_parts() {
   local fast=0 base own vb ab
   [ "${1%:fast}" != "$1" ] && fast=1
   base="$(printf '%s\n' "${OWN_BASES:-}" | awk -v id="$1" 'index($0, id "=") == 1 { print substr($0, length(id) + 2); exit }')"
-  [ -n "$base" ] || { echo "fetch: $1 was not probed before the download" >&2; return 1; }
+  [[ "$base" =~ ^[A-Za-z0-9._-]+$ ]] || { echo "fetch: $1 was not probed before the download" >&2; return 1; }
   [ "$fast" = 0 ] || base="$base-fast"
   # Some models have no download of their own and reuse others' programs (LFM3-Omni-2B does),
   # so ask only that the image knows the model.

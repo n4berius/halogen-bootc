@@ -141,16 +141,25 @@ fi
 # the models read-only and no token: a checkpoint is untrusted input to Halogen's parser, so it
 # never sees the network or your token. The download container is only told the answers.
 own_bases=""
-if [[ ",$npu_models" == *,/* ]]; then
+need_probe=""
+# Split the way the download container does (commas and spaces), so no path slips past.
+for id in ${npu_models//,/ }; do case "$id" in /*) need_probe=1 ;; esac; done
+if [ -n "$need_probe" ]; then
   own_bases="$(podman run --rm --pull=never --read-only --tmpfs /tmp --network=none \
     --cap-drop=all --security-opt no-new-privileges --entrypoint bash \
-    -e FETCH_MODE=probe -e "NPU_MODELS=$npu_models" \
+    -e HF_HOME=/tmp/hf -e HF_HUB_OFFLINE=1 -e FETCH_MODE=probe -e "NPU_MODELS=$npu_models" \
     -v "$models:/models:ro" -v "$helper:/fetch.sh:ro" "$HALOGEN_IMAGE" /fetch.sh)"
   case "$?" in
     0) ;;
     3) echo "halogen-fetch: the configured models cannot be fetched; fix /srv/configs/halogen.env" >&2; exit 1 ;;
-    *) echo "halogen-fetch: could not check your own NPU checkpoints; it is tried again at the next start" >&2; exit 1 ;;
+    *) echo "halogen-fetch: could not check your own NPU checkpoints. Try again with: sudo halogenctl restart" >&2; exit 1 ;;
   esac
+  # The probe read untrusted checkpoints, so its answers are checked here, outside it: only
+  # "path=model" lines, with a plain model name, reach the download container.
+  if printf '%s\n' "$own_bases" | grep -vE '^$|^/models/[^=]+=[A-Za-z0-9._-]+$' | grep -q .; then
+    echo "halogen-fetch: Halogen's check of your own NPU checkpoints gave an answer halOS doesn't accept" >&2
+    exit 1
+  fi
 fi
 
 wait_s=15
