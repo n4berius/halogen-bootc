@@ -162,6 +162,10 @@ group is named after the machine, such as `halos_freyja`), and **Custom** lets y
 Keep at least 150 GiB for `/var/srv/models`. Tick **Encrypt my data** for LUKS, and create an
 admin account with admin rights.
 
+The third entry, **unattended test install**, is for halOS's automated VM test. It reads its
+answers from a prepared volume and stops if there is none; you don't need it. From the other
+entries such a volume is ignored.
+
 The installed system starts at a text login, and you don't need to create another account.
 
 ## 6. First-boot setup, then let the first boot finish

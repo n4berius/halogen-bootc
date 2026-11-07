@@ -81,7 +81,7 @@ typed("{ echo RESULT-START; cat /proc/cmdline; dmesg | grep -i secure; bootctl s
       # The guided install (#42): volume sizes, hostname, admin user, and no password left behind.
       "lvs --noheadings --units g --nosuffix -o lv_name,lv_size halos; cat /etc/hostname; id admin; "
       "grep -rIlsE 'halogentest|rootsecret|adminsecret' /etc /var/roothome /var/log /boot | sed 's/.*/PWLEAK &/'; "
-      "echo PWJOURNAL $(journalctl -b -o cat | grep -cE 'halogentest|rootsecret|adminsecret'); "
+      "echo PWJOURNAL $(journalctl -o cat | grep -cE 'halogentest|rootsecret|adminsecret'); "
       "echo RESULT-END; } > /dev/ttyS0 2>&1\n")
 
 def wait_serial(marker, seconds):

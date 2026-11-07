@@ -6,11 +6,14 @@
 #
 # Usage: plan-install out.ks
 #
-# Unattended (the VM install test): a volume labelled HALOS_ANSWERS holding a file "answers" with
-# key=value lines: disk, confirm (the disk's name again, needed only when it holds data),
-# hostname, luks_passphrase (empty: no encryption), root_password (empty: root locked),
-# admin_user, admin_password, finish (reboot or poweroff), allow_root_ssh (yes: the installer's
-# own root SSH file, which the image overrides; test only). The file is read, never run.
+# Unattended (the VM install test): only from the boot menu's unattended entry, which sets
+# halos.unattended=1 (the %pre passes HALOS_UNATTENDED=1). A volume labelled HALOS_ANSWERS then
+# holds a file "answers" with key=value lines: disk, confirm (the disk's name again, needed only
+# when it holds data), hostname, luks_passphrase (empty: no encryption), root_password (empty:
+# root locked), admin_user, admin_password, finish (poweroff, the default, or reboot),
+# allow_root_ssh (yes: the installer's own root SSH file, which the image overrides; test only).
+# The file is read, never run. From any other entry such a volume is ignored, so a stick left
+# plugged in can never start a wipe.
 set -uo pipefail
 out="${1:?usage: plan-install out.ks}"
 min_bytes="${HALOS_MIN_DISK_BYTES:-480000000000}"
@@ -34,19 +37,17 @@ stop() {
 }
 
 # --- Answers for an unattended install ---------------------------------------------------------
-answers_file="${HALOS_ANSWERS_FILE:-}"
-answers_dev=""
-if [ -z "$answers_file" ]; then
-  answers_dev="$(blkid -L "$answers_label" 2>/dev/null || true)"
-  if [ -n "$answers_dev" ]; then
+answers_dev="$(blkid -L "$answers_label" 2>/dev/null || true)"
+if [ "${HALOS_UNATTENDED:-}" = 1 ]; then
+  unattended=1
+  answers_file="${HALOS_ANSWERS_FILE:-}"
+  if [ -z "$answers_file" ]; then
+    [ -n "$answers_dev" ] || stop "The unattended entry needs a volume labelled $answers_label."
     mnt="$(mktemp -d)"
-    mount -o ro "$answers_dev" "$mnt" || stop "The answers volume $answers_dev could not be read."
+    mount -o ro,nosuid,nodev,noexec "$answers_dev" "$mnt" || stop "The answers volume $answers_dev could not be read."
     answers_file="$mnt/answers"
   fi
-fi
-if [ -n "$answers_file" ]; then
   [ -f "$answers_file" ] || stop "The answers volume has no file named answers."
-  unattended=1
   while IFS= read -r line || [ -n "$line" ]; do
     case "$line" in ''|'#'*) continue ;; esac
     key="${line%%=*}"; value="${line#*=}"
@@ -58,6 +59,9 @@ if [ -n "$answers_file" ]; then
   done < "$answers_file"
   [ -z "${mnt:-}" ] || umount "$mnt" 2>/dev/null || true
   say "halOS guided install: using the answers on ${answers_dev:-$answers_file}."
+elif [ -n "$answers_dev" ]; then
+  say "A volume labelled $answers_label is plugged in ($answers_dev). Only the unattended menu" \
+      "entry uses it, so this install asks the questions instead."
 fi
 
 # --- Questions ---------------------------------------------------------------------------------
@@ -96,6 +100,8 @@ valid_user() {
     root|halogen|bin|daemon|adm|lp|sync|shutdown|halt|mail|operator|games|ftp|nobody) return 1 ;;
     sshd|systemd-*|dbus|polkitd|tss|chrony|wheel) return 1 ;;
   esac
+  # Any other account or group the system already has (it has the installer's, and more).
+  ! getent passwd "$1" >/dev/null && ! getent group "$1" >/dev/null
 }
 valid_host() { [[ "$1" =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$ ]]; }
 
@@ -131,6 +137,12 @@ done < <(lsblk -J -b -d -o NAME,TYPE,TRAN,RM,RO,SIZE,MODEL 2>/dev/null | jq -r '
   [.name, .type, (.tran // ""), (.rm|tostring), (.ro|tostring), (.size|tostring),
    ((.model // "") | gsub("[^ -~]"; "") | gsub("^ +| +$"; ""))] | join("\u001f")')
 
+# An exact name from the list, nothing else (not "a b", not a pattern).
+is_usable() {
+  local d
+  for d in "${usable[@]}"; do [ "$d" = "$1" ] && return 0; done
+  return 1
+}
 describe() {
   local d="$1"
   printf '  %-10s %8s  %s  (%s)\n' "$d" "$(human "${size[$d]}")" "${model[$d]}" "${content[$d]:-empty}"
@@ -146,7 +158,7 @@ fi
 disk=""
 if [ -n "$unattended" ]; then
   disk="${ans[disk]:-}"
-  [[ " ${usable[*]} " == *" $disk "* ]] || stop "The answers name disk '$disk', which isn't an internal disk big enough for halOS."
+  is_usable "$disk" || stop "The answers name disk '$disk', which isn't an internal disk big enough for halOS."
   if [ -n "${content[$disk]}" ] && [ "${ans[confirm]:-}" != "$disk" ]; then
     stop "Disk $disk $(describe "$disk" | sed 's/^ *//') holds data, and the answers don't confirm erasing it."
   fi
@@ -163,7 +175,7 @@ else
   while :; do
     ask "Type the name of the disk to ERASE and install on (for example ${usable[0]}), or press Enter to stop:"
     [ -n "$REPLY" ] || stop "Stopped at your request."
-    if [[ " ${usable[*]} " == *" $REPLY "* ]]; then disk="$REPLY"; break; fi
+    if is_usable "$REPLY"; then disk="$REPLY"; break; fi
     say "'$REPLY' isn't one of the disks above. Type its name exactly, as shown in the first column."
   done
 fi
@@ -173,7 +185,8 @@ if [ -n "$unattended" ]; then
   luks="${ans[luks_passphrase]:-}"
   rootpw="${ans[root_password]:-}"
   admin="${ans[admin_user]:-}"; adminpw="${ans[admin_password]:-}"
-  finish="${ans[finish]:-reboot}"
+  # Power off by default: rebooting into the same USB drive would install again.
+  finish="${ans[finish]:-poweroff}"
   valid_host "$hostname" || stop "The answers' hostname isn't valid."
   [ -z "$luks" ] || valid_secret "$luks" 8 || stop "The answers' disk passphrase isn't valid."
   [ -z "$rootpw" ] || valid_secret "$rootpw" 8 || stop "The answers' root password isn't valid."
@@ -222,7 +235,8 @@ umask 077
 {
   echo "network --hostname=$hostname"
   if [ -n "$rootpw" ]; then
-    echo "rootpw --plaintext $(q "$rootpw")$([ "${ans[allow_root_ssh]:-}" = yes ] && echo ' --allow-ssh')"
+    # -- ends the options, so a password that starts with - is still the password.
+    echo "rootpw --plaintext$([ "${ans[allow_root_ssh]:-}" = yes ] && echo ' --allow-ssh') -- $(q "$rootpw")"
   else
     echo "rootpw --lock"
   fi

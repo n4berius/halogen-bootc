@@ -23,6 +23,7 @@ f findmnt '[ "$3" = /run/install/repo ] && echo /dev/sdb1 || exit 1'
 f mount 'echo "mount $*" >> "$FAKE/log"; cp "$FAKE/answers" "$4/answers"'
 f umount 'true'
 f systemctl 'echo "systemctl $*" >> "$FAKE/log"'
+f getent '[ "$2" = sssd ]'
 export PATH="$work/bin:$PATH"
 plan="$repo/installer/guided/plan-install"
 ks="$work/plan.ks"
@@ -55,6 +56,7 @@ KickstartParser(h).readKickstart(sys.argv[1])
 got = {
   "luks": [p.passphrase for p in h.partition.partitions if p.encrypted],
   "root": h.rootpw.password if not h.rootpw.lock else None,
+  "allow_ssh": h.rootpw.allow_ssh,
   "admin": [(u.name, u.password, u.groups) for u in h.user.userList],
   "disk": h.ignoredisk.onlyuse,
   "lvs": sorted((l.name, l.mountpoint, l.grow) for l in h.logvol.lvList),
@@ -90,15 +92,16 @@ parse "{'luks': [\"it's a secret\"], 'root': None, 'admin': [('nab', 'hunter2hun
 ok "one empty disk: a yes, the questions, fixed halos-* volumes, and the passphrase survives quoting"
 
 # Bad answers are asked again; root is enabled; no encryption.
-typed yes 'Bad_Name' freyja maybe no yes short rootpass1 rootpass1 root halogen nab pw12345678 pw12345678 yes
+typed yes 'Bad_Name' freyja maybe no yes short --allow-ssh --allow-ssh root halogen sssd nab pw12345678 pw12345678 yes
 [ "$rc" = 0 ] || { cat "$work/out" >&2; exit 1; }
 expect "$work/out" 'Please answer yes or no.'
 expect "$work/out" 'It needs at least 8 characters.'
 expect "$work/out" 'not a system name such as root or halogen'
 expect "$ks" 'network --hostname=freyja'
 if grep -q 'encrypted' "$ks"; then echo "encrypted without being asked to" >&2; exit 1; fi
-parse "{'luks': [], 'root': 'rootpass1', 'admin': [('nab', 'pw12345678', ['wheel'])]}"
-ok "bad answers are asked again; root on, encryption off"
+# A password that looks like an option is still the password (rootpw ... -- '<password>').
+parse "{'luks': [], 'root': '--allow-ssh', 'allow_ssh': False, 'admin': [('nab', 'pw12345678', ['wheel'])]}"
+ok "bad answers and existing account names are asked again; root on, encryption off"
 
 # A disk that holds data, or two disks: the disk's name must be typed. A wrong name asks again.
 echo crypto_LUKS > "$work/fs.nvme0n1"; echo part > "$work/parts.nvme0n1"
@@ -131,10 +134,20 @@ typed ''
 expect "$work/out" 'needs an internal disk of at least 480GB'
 ok "a no, an empty name or a small disk stops with nothing written"
 
-# Unattended (the VM test): answers from a labelled volume, never run as code, never offered as
-# a disk. A disk with data needs confirm=<disk>.
+# An answers volume alone changes nothing: without the unattended entry, the questions are asked.
 export FAKE_ANSWERS_DEV=/dev/vdb
 disks "$(disk vda $TB '' QEMU)" "$(disk vdb 376832 '' QEMU)"
+echo disk=vda > "$work/answers"
+typed no ''
+[ "$rc" = 1 ] && [ ! -e "$ks" ] || { echo "the answers volume was used without the unattended entry" >&2; exit 1; }
+expect "$work/out" 'Only the unattended menu'
+expect "$work/out" 'Erase it and install halOS?'
+if grep -q '^mount' "$work/log"; then echo "the answers volume was mounted" >&2; exit 1; fi
+ok "an answers volume is ignored outside the unattended entry"
+
+# Unattended (the VM test): answers from a labelled volume, never run as code, never offered as
+# a disk. A disk with data needs confirm=<disk>.
+export HALOS_UNATTENDED=1
 cat > "$work/answers" <<'A'
 disk=vda
 hostname=halostest
@@ -142,13 +155,12 @@ luks_passphrase=halogentest
 root_password=$(touch $FAKE/pwned)
 admin_user=admin
 admin_password=adminsecret
-finish=poweroff
 allow_root_ssh=yes
 A
 run < /dev/null
 [ "$rc" = 0 ] || { cat "$work/out" >&2; exit 1; }
 [ ! -e "$work/pwned" ] || { echo "an answer ran as a command" >&2; exit 1; }
-expect "$work/log" 'mount -o ro /dev/vdb'
+expect "$work/log" 'mount -o ro,nosuid,nodev,noexec /dev/vdb'
 expect "$ks" 'poweroff'
 expect "$ks" ' --allow-ssh'
 parse "{'luks': ['halogentest'], 'root': '\$(touch \$FAKE/pwned)', 'disk': ['vda']}"
@@ -158,7 +170,12 @@ run < /dev/null
 echo confirm=vda >> "$work/answers"
 run < /dev/null
 [ "$rc" = 0 ] || { cat "$work/out" >&2; exit 1; }
-sed -i 's/^disk=vda/disk=vdb/' "$work/answers"
+# Only an exact name: not two names, not the answers volume.
+disks "$(disk vda $TB '' QEMU)" "$(disk vdc $TB '' QEMU)" "$(disk vdb 376832 '' QEMU)"
+sed -i 's/^disk=vda/disk=vda vdc/' "$work/answers"
+run < /dev/null
+[ "$rc" = 1 ] && [ ! -e "$ks" ] || { echo "two disk names were accepted" >&2; exit 1; }
+sed -i 's/^disk=vda vdc/disk=vdb/' "$work/answers"
 run < /dev/null
 [ "$rc" = 1 ] || { echo "the answers volume was accepted as the disk" >&2; exit 1; }
 echo 'evil=1' >> "$work/answers"

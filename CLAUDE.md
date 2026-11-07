@@ -146,7 +146,9 @@ name, but allows saying halOS runs Halogen.
   (`ignoredisk`, `reqpart --add-boot`, VG `halos`, fixed LV names), users, hostname, reboot.
   Kickstart values are single-quoted for pykickstart's shlex; `tests/guided.sh` parses them with
   pykickstart when installed. The VM test answers from a volume labelled `HALOS_ANSWERS` (file
-  `answers`, read as data, never sourced); there `lsblk` reports no transport, so fields are
+  `answers`, read as data, never sourced), used only from the third boot entry
+  (`halos.unattended=1`; `tests/grub-pick.py` selects it by OCR within grub's 5 s), so a stick
+  left plugged in never starts a wipe; there `lsblk` reports no transport, so fields are
   split on `\x1f`, since `read` merges empty tab-separated ones.
 - `halogen-enroll-tpm` uses PCR 7 and `--wipe-slot=tpm2`, so re-enrolling replaces the old
   binding. Enrolling twice on the same boot is a no-op ("already enrolled").

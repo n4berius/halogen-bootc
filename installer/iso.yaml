@@ -10,3 +10,8 @@ grub2:
     - name: "Install halOS (@EDITION@, custom partitioning)"
       linux: ${kernelpath} ${root} inst.graphical console=ttyS0 console=tty0
       initrd: ${initrdpath}
+    # For the VM install test: answers from a volume labelled HALOS_ANSWERS, nothing asked.
+    # Without this entry's halos.unattended=1, such a volume is ignored.
+    - name: "Install halOS (@EDITION@, unattended test install)"
+      linux: ${kernelpath} ${root} inst.ks=file:/halos-guided.ks inst.text halos.unattended=1 console=ttyS0 console=tty0
+      initrd: ${initrdpath}

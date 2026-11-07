@@ -1,7 +1,7 @@
 #!/bin/bash
 # Install the ISO to a blank disk unattended, boot it with Secure Boot on, and report on it.
 # Usage: tests/iso-install.sh path/to.iso os-image-reference output-dir variant
-# It takes the guided installer's default boot entry, with its answers on a volume labelled
+# It takes the guided installer's unattended boot entry, with its answers on a volume labelled
 # HALOS_ANSWERS instead of typed. The NPU edition installs on LUKS to a 512 GB disk, no-NPU without
 # LUKS to a 2 TB one, so both encrypted and plain installs and both ends of the sizing are tested.
 # The VM has an emulated TPM: the LUKS install is bound to it with halogen-enroll-tpm, then
@@ -47,7 +47,11 @@ vm() {
 
 echo "=== installing ==="
 timeout 1500 bash -c "$(declare -f vm); code=$code out=$out; vm -cdrom '$iso' -boot d \
-  -drive file=$out/answers.iso,format=raw,if=virtio,readonly=on -serial file:$out/install.log"
+  -drive file=$out/answers.iso,format=raw,if=virtio,readonly=on -serial file:$out/install.log" &
+install=$!
+# Answers are used only from the unattended menu entry, which the test picks like a person would.
+python3 "$here/grub-pick.py" "$out/monitor.sock" "$out" || { kill "$install"; exit 1; }
+wait "$install" || { echo "the install did not finish (see install.log)" >&2; exit 1; }
 echo "install finished"
 
 echo "=== first boot from disk ==="
