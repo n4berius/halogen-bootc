@@ -180,6 +180,17 @@ else
   done
 fi
 
+# Every guided install names its volume group halos. Another disk that still has one (an earlier
+# install) would leave two, and booting could pick the wrong one. Encrypted disks can't be seen
+# into, so this catches only unlocked ones.
+while read -r pv vg; do
+  [ "$vg" = halos ] || continue
+  owner="$(lsblk -ndo PKNAME "$pv" 2>/dev/null)"; owner="${owner:-${pv#/dev/}}"
+  [ "$owner" = "$disk" ] && continue
+  stop "Disk $owner already has a halOS volume group (halos) from an earlier install. Two would" \
+       "confuse booting: wipe or remove that disk first, or use the custom partitioning entry."
+done < <(pvs --noheadings -o pv_name,vg_name 2>/dev/null)
+
 if [ -n "$unattended" ]; then
   hostname="${ans[hostname]:-halos}"
   luks="${ans[luks_passphrase]:-}"

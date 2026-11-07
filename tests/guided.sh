@@ -14,7 +14,7 @@ f lsblk 'case "$*" in
   "-J -b -d -o NAME,TYPE,TRAN,RM,RO,SIZE,MODEL") cat "$FAKE/disks.json" ;;
   "-nro FSTYPE "*) cat "$FAKE/fs.${3#/dev/}" 2>/dev/null || true ;;
   "-nro TYPE "*) echo disk; cat "$FAKE/parts.${3#/dev/}" 2>/dev/null || true ;;
-  "-ndo PKNAME "*) [ "$3" != /dev/sdb1 ] || echo sdb ;;
+  "-ndo PKNAME "*) case "$3" in /dev/sdb1) echo sdb ;; /dev/nvme1n1p3) echo nvme1n1 ;; esac ;;
   *) echo "lsblk $*" >&2; exit 9 ;;
 esac'
 f wipefs 'cat "$FAKE/pt.${5#/dev/}" 2>/dev/null || true'
@@ -24,6 +24,7 @@ f mount 'echo "mount $*" >> "$FAKE/log"; cp "$FAKE/answers" "$4/answers"'
 f umount 'true'
 f systemctl 'echo "systemctl $*" >> "$FAKE/log"'
 f getent '[ "$2" = sssd ]'
+f pvs 'cat "$FAKE/pvs" 2>/dev/null || true'
 export PATH="$work/bin:$PATH"
 plan="$repo/installer/guided/plan-install"
 ks="$work/plan.ks"
@@ -117,7 +118,15 @@ disks "$(disk nvme0n1 $TB nvme A)" "$(disk nvme1n1 $TB nvme B)"
 typed nvme1n1 '' no no nab pw12345678 pw12345678 yes
 [ "$rc" = 0 ] || { cat "$work/out" >&2; exit 1; }
 expect "$ks" 'ignoredisk --only-use=nvme1n1'
-ok "a disk with data, or a choice of two, needs its name typed"
+# An earlier install's halos volume group on the other disk stops it; on the chosen disk it doesn't.
+echo '  /dev/nvme1n1p3 halos' > "$work/pvs"
+typed nvme0n1 '' no no nab pw12345678 pw12345678 yes ''
+[ "$rc" = 1 ] && [ ! -e "$ks" ] || { echo "a second halos volume group was allowed" >&2; exit 1; }
+expect "$work/out" 'Disk nvme1n1 already has a halOS volume group'
+typed nvme1n1 '' no no nab pw12345678 pw12345678 yes
+[ "$rc" = 0 ] || { cat "$work/out" >&2; echo "reinstalling over halos was refused" >&2; exit 1; }
+rm "$work/pvs"
+ok "a disk with data, or a choice of two, needs its name typed; one halos volume group only"
 
 # Stopping: at the final question, with an empty name, or when no disk is big enough. Nothing is
 # written, and the machine powers off.

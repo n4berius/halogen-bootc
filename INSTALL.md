@@ -125,7 +125,8 @@ answered them all and said yes at the end.
    - One empty disk: it shows it and asks **"Erase it and install halOS?"**
    - More than one disk, or a disk with anything on it (partitions, an old install, LUKS): it
      shows each disk's name, size, model and what's on it, and you **type the name** of the one
-     to erase, for example `nvme0n1`. Pressing Enter instead stops without changing anything.
+     to erase, for example `nvme0n1`. Pressing Enter instead stops without changing anything,
+     and the machine powers off at the next Enter.
 2. **Name of this machine** on the network. Enter keeps `halos`.
 3. **Encrypt the disk (LUKS)?** If yes, type the passphrase twice. You type it at every boot,
    until you let the TPM unlock it in [first-boot setup](#6-first-boot-setup-then-let-the-first-boot-finish).
@@ -137,7 +138,12 @@ answered them all and said yes at the end.
 6. It shows a summary and asks once more: **"Erase nvme0n1 and install halOS now?"**
 
 The install copies the OS from the USB drive, so it needs no network, and takes a few minutes.
-The machine then restarts: remove the USB drive.
+The machine then restarts: remove the USB drive. If you forget and it boots the USB drive again,
+nothing happens without you: the disk now has halOS on it, so the installer asks you to type its
+name before it would erase anything.
+
+The guided install sets the clock to UTC and takes the network address from DHCP. Halogen doesn't
+care about the time zone; `sudo timedatectl set-timezone <zone>` changes it later.
 
 The disk is laid out the same way on every machine, with LVM and XFS. The volume group is
 always `halos`, whatever the machine's name:

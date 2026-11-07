@@ -40,7 +40,7 @@ RUN sed -i "s|@EDITION@|${HALOGEN_VARIANT}|g" /usr/lib/image-builder/bootc/iso.y
     sed -i "s|@TARGET_IMAGE@|${TARGET_IMAGE}|g" /usr/share/anaconda/interactive-defaults.ks \
       /usr/share/anaconda/halos-guided.ks && \
     ! grep -q '@TARGET_IMAGE@' /usr/share/anaconda/interactive-defaults.ks /usr/share/anaconda/halos-guided.ks && \
-    command -v chvt jq numfmt wipefs lsblk blkid findmnt
+    for c in chvt jq numfmt wipefs lsblk blkid findmnt pvs getent; do command -v "$c" >/dev/null || exit 1; done
 
 # What lorax normally does so Anaconda can run. Based on image-builder's example.
 RUN echo 'install:x:0:0:root:/root:/usr/libexec/anaconda/run-anaconda' >> /etc/passwd && \
@@ -58,4 +58,5 @@ RUN mkdir -p "$(realpath /root)" && \
     DRACUT_NO_XATTR=1 dracut --force -v --zstd --reproducible --no-hostonly \
       --add "anaconda dmsquash-live" \
       --include /usr/share/anaconda/halos-guided.ks /halos-guided.ks \
-      "/usr/lib/modules/${kernel}/initramfs.img" "${kernel}"
+      "/usr/lib/modules/${kernel}/initramfs.img" "${kernel}" && \
+    lsinitrd "/usr/lib/modules/${kernel}/initramfs.img" | grep -q ' halos-guided.ks$'
