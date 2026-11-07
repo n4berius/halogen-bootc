@@ -15,9 +15,10 @@ How releases are used:
 
 ## Now: v0.19.1-beta.1
 
-Promote `v0.19.1-alpha.2` once the test machine has run it for a few days:
+Promote `v0.19.1-alpha.3` once the test machine has run it for a few days:
 - normal use on the official checkpoint and on a custom one
 - the selftest clean on both
+- the login screen and SSH message show Halogen's state, and say "ready" once it answers
 - one rollback and back
 
 ## Before the release candidate

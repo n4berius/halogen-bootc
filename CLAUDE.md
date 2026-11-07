@@ -182,11 +182,12 @@ name, but allows saying halOS runs Halogen.
 Open issues are the source of truth, prioritised with the `priority: high/medium/low` labels
 and tracked on the owner's project board. [ROADMAP.md](ROADMAP.md) holds the order and
 [CHANGELOG.md](CHANGELOG.md) what each release changed. When this file was last updated (after
-`v0.19.1-alpha.2`):
+`v0.19.1-alpha.3`):
 
-- Released: `v0.19.1-alpha.2`, to be promoted to `v0.19.1-beta.1` after a few days on freyja. It has
+- Released: `v0.19.1-alpha.3`, to be promoted to `v0.19.1-beta.1` after a few days on freyja. It has
   the security hardening (#51 to #53), the options list (#57), Halogen 0.19.1 with its own XRT
-  (#58, #59) and custom Flash checkpoints (#60). Freyja runs `unsloth-iq4` with `flash use`, at about
+  (#58, #59), custom Flash checkpoints (#60), the login status (#63), `halosctl setup` (#64) and
+  key signing (#65); it is the first release signed with halOS's key. Freyja runs `unsloth-iq4` with `flash use`, at about
   the official model's speed.
 - Before RC, in this order: machines refuse unsigned images (#46 phase 2; needs key-pair signing,
   since containers/image can't match GitHub's keyless URI identity, and the owner makes the key),
