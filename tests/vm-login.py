@@ -82,6 +82,10 @@ typed("{ echo RESULT-START; cat /proc/cmdline; dmesg | grep -i secure; bootctl s
       "lvs --noheadings --units g --nosuffix -o lv_name,lv_size halos; cat /etc/hostname; id admin; "
       "grep -rIlsE 'halogentest|rootsecret|adminsecret' /etc /var/roothome /var/log /boot | sed 's/.*/PWLEAK &/'; "
       "echo PWJOURNAL $(journalctl -o cat | grep -cE 'halogentest|rootsecret|adminsecret'); "
+      # The serial getty has halOS's port check and still runs on a port that answers (QEMU's
+      # ttyS0). QEMU's other ports don't fail like freyja's dead ttyS0, so the skip is checked there.
+      "echo SERIALGETTY $(systemctl is-active serial-getty@ttyS0.service) "
+      "$(systemctl show serial-getty@ttyS0.service -p ExecCondition --value | grep -c stty); "
       "echo RESULT-END; } > /dev/ttyS0 2>&1\n")
 
 def wait_serial(marker, seconds):

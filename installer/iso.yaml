@@ -1,14 +1,17 @@
 label: "halos-flash"
+# Anaconda copies the installer's console= arguments to the installed system. Only the test entry
+# has the serial console, which the VM test reads; installs from the other two get none, so no
+# serial login prompt either.
 grub2:
   timeout: 5
   entries:
     # Guided (#42): picks the disk and asks only encryption, root and the admin user.
     # inst.ks reads the kickstart from the boot image, where the Containerfile puts it.
     - name: "Install halOS (@EDITION@)"
-      linux: ${kernelpath} ${root} inst.ks=file:/halos-guided.ks inst.text console=ttyS0 console=tty0
+      linux: ${kernelpath} ${root} inst.ks=file:/halos-guided.ks inst.text
       initrd: ${initrdpath}
     - name: "Install halOS (@EDITION@, custom partitioning)"
-      linux: ${kernelpath} ${root} inst.graphical console=ttyS0 console=tty0
+      linux: ${kernelpath} ${root} inst.graphical
       initrd: ${initrdpath}
     # For the VM install test: answers from a volume labelled HALOS_ANSWERS, nothing asked.
     # Without this entry's halos.unattended=1, such a volume is ignored.
