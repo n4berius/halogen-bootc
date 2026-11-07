@@ -1,0 +1,251 @@
+#!/bin/bash
+# halOS guided install: picks the disk and asks the few questions the graphical installer would
+# otherwise ask, then writes the kickstart lines for them. Runs from the guided kickstart's %pre
+# (installer/guided/halos-guided.ks) on its own text console, before Anaconda starts.
+# Nothing is erased here: Anaconda erases the chosen disk only after this has finished.
+#
+# Usage: plan-install out.ks
+#
+# Unattended (the VM install test): a volume labelled HALOS_ANSWERS holding a file "answers" with
+# key=value lines: disk, confirm (the disk's name again, needed only when it holds data),
+# hostname, luks_passphrase (empty: no encryption), root_password (empty: root locked),
+# admin_user, admin_password, finish (reboot or poweroff), allow_root_ssh (yes: the installer's
+# own root SSH file, which the image overrides; test only). The file is read, never run.
+set -uo pipefail
+out="${1:?usage: plan-install out.ks}"
+min_bytes="${HALOS_MIN_DISK_BYTES:-480000000000}"
+answers_label="${HALOS_ANSWERS_LABEL:-HALOS_ANSWERS}"
+export LC_ALL=C
+
+say() { printf '%s\n' "$@"; }
+human() { numfmt --to=si --round=nearest --suffix=B --format='%.0f' "$1" 2>/dev/null || echo "$1 bytes"; }
+
+declare -A ans=()
+unattended=""
+# Stop without changing anything. Interactive: wait for Enter, then power off, since there is
+# nothing to go back to. Unattended: fail, so the test stops.
+stop() {
+  say "" "$@" "" "Nothing on any disk was changed."
+  if [ -n "$unattended" ]; then exit 1; fi
+  say "Remove the USB drive if you like, then press Enter to power off."
+  read -r _ || true
+  systemctl poweroff 2>/dev/null || poweroff -f
+  exit 1
+}
+
+# --- Answers for an unattended install ---------------------------------------------------------
+answers_file="${HALOS_ANSWERS_FILE:-}"
+answers_dev=""
+if [ -z "$answers_file" ]; then
+  answers_dev="$(blkid -L "$answers_label" 2>/dev/null || true)"
+  if [ -n "$answers_dev" ]; then
+    mnt="$(mktemp -d)"
+    mount -o ro "$answers_dev" "$mnt" || stop "The answers volume $answers_dev could not be read."
+    answers_file="$mnt/answers"
+  fi
+fi
+if [ -n "$answers_file" ]; then
+  [ -f "$answers_file" ] || stop "The answers volume has no file named answers."
+  unattended=1
+  while IFS= read -r line || [ -n "$line" ]; do
+    case "$line" in ''|'#'*) continue ;; esac
+    key="${line%%=*}"; value="${line#*=}"
+    case "$key" in
+      disk|confirm|hostname|luks_passphrase|root_password|admin_user|admin_password|finish|allow_root_ssh)
+        ans[$key]="$value" ;;
+      *) stop "Unknown answer: $key" ;;
+    esac
+  done < "$answers_file"
+  [ -z "${mnt:-}" ] || umount "$mnt" 2>/dev/null || true
+  say "halOS guided install: using the answers on ${answers_dev:-$answers_file}."
+fi
+
+# --- Questions ---------------------------------------------------------------------------------
+ask() { # prompt [default]: the answer in REPLY
+  local a
+  printf '%s ' "$1"
+  IFS= read -r a || stop "No more input."
+  REPLY="${a:-${2:-}}"
+}
+yesno() {
+  while :; do
+    ask "$1 [yes/no]"
+    case "${REPLY,,}" in y|yes) return 0 ;; n|no) return 1 ;; esac
+    say "Please answer yes or no."
+  done
+}
+# A password or passphrase, typed twice and not shown. Printable ASCII only: the disk passphrase
+# is typed at every boot, before any keyboard layout but US English is loaded.
+secret() { # prompt min-length: the answer in REPLY
+  local a b
+  while :; do
+    printf '%s: ' "$1"; IFS= read -rs a || stop "No more input."; printf '\n'
+    if [ "${#a}" -lt "$2" ]; then say "It needs at least $2 characters."; continue; fi
+    if ! [[ "$a" =~ ^[[:print:]]+$ ]]; then
+      say "Use only letters, digits, spaces and the symbols on a US keyboard."; continue
+    fi
+    printf 'Type it again: '; IFS= read -rs b || stop "No more input."; printf '\n'
+    if [ "$a" != "$b" ]; then say "The two didn't match. Try again."; continue; fi
+    REPLY="$a"; return 0
+  done
+}
+valid_secret() { [ "${#1}" -ge "$2" ] && [[ "$1" =~ ^[[:print:]]+$ ]]; }
+valid_user() {
+  [[ "$1" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] || return 1
+  case "$1" in
+    root|halogen|bin|daemon|adm|lp|sync|shutdown|halt|mail|operator|games|ftp|nobody) return 1 ;;
+    sshd|systemd-*|dbus|polkitd|tss|chrony|wheel) return 1 ;;
+  esac
+}
+valid_host() { [[ "$1" =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$ ]]; }
+
+# --- Disks -------------------------------------------------------------------------------------
+# Internal disks only: no USB or removable drives, no read-only ones, nothing virtual, and never
+# the drive the installer or the answers came from.
+skip_disks=" "
+for src in "$answers_dev" "$(findmnt -nvo SOURCE /run/install/repo 2>/dev/null)" \
+           "$(findmnt -nvo SOURCE /run/initramfs/live 2>/dev/null)"; do
+  [ -n "$src" ] || continue
+  skip_disks+="$(lsblk -ndo PKNAME "$src" 2>/dev/null) ${src#/dev/} "
+done
+declare -a usable=() small=()
+declare -A size=() model=() content=()
+# Fields joined by the unit separator, not tabs: read would merge empty tab-separated fields.
+while IFS=$'\x1f' read -r name type tran rm ro bytes mdl; do
+  [ "$type" = disk ] || continue
+  case "$name" in zram*|ram*|loop*|sr*|fd*) continue ;; esac
+  [ "$tran" != usb ] && [ "$rm" != true ] && [ "$rm" != 1 ] && [ "$ro" != true ] && [ "$ro" != 1 ] || continue
+  case "$skip_disks" in *" $name "*) continue ;; esac
+  size[$name]="$bytes"; model[$name]="${mdl:-unknown model}"
+  # What is on it: partitions, filesystems, LUKS, LVM, or a partition table on its own.
+  what="$(lsblk -nro FSTYPE "/dev/$name" 2>/dev/null | awk 'NF' | sort -u | paste -sd, - | sed 's/,/, /g')"
+  pt="$(wipefs -n --noheadings -o TYPE "/dev/$name" 2>/dev/null | head -n 1)"
+  parts="$(lsblk -nro TYPE "/dev/$name" 2>/dev/null | grep -c '^part$' || true)"
+  if [ -n "$what" ] || [ -n "$pt" ] || [ "${parts:-0}" -gt 0 ]; then
+    content[$name]="has data: ${what:-${pt:-partitions}}"
+  else
+    content[$name]=""
+  fi
+  if [ "$bytes" -ge "$min_bytes" ]; then usable+=("$name"); else small+=("$name"); fi
+done < <(lsblk -J -b -d -o NAME,TYPE,TRAN,RM,RO,SIZE,MODEL 2>/dev/null | jq -r '.blockdevices[] |
+  [.name, .type, (.tran // ""), (.rm|tostring), (.ro|tostring), (.size|tostring),
+   ((.model // "") | gsub("[^ -~]"; "") | gsub("^ +| +$"; ""))] | join("\u001f")')
+
+describe() {
+  local d="$1"
+  printf '  %-10s %8s  %s  (%s)\n' "$d" "$(human "${size[$d]}")" "${model[$d]}" "${content[$d]:-empty}"
+}
+
+say "" "halOS guided install" "===================="
+if [ "${#usable[@]}" -eq 0 ]; then
+  for d in "${small[@]}"; do describe "$d"; done
+  stop "No disk is big enough. halOS needs an internal disk of at least $(human "$min_bytes")" \
+       "(the models alone take about 130 GB). USB drives are never used."
+fi
+
+disk=""
+if [ -n "$unattended" ]; then
+  disk="${ans[disk]:-}"
+  [[ " ${usable[*]} " == *" $disk "* ]] || stop "The answers name disk '$disk', which isn't an internal disk big enough for halOS."
+  if [ -n "${content[$disk]}" ] && [ "${ans[confirm]:-}" != "$disk" ]; then
+    stop "Disk $disk $(describe "$disk" | sed 's/^ *//') holds data, and the answers don't confirm erasing it."
+  fi
+elif [ "${#usable[@]}" -eq 1 ] && [ -z "${content[${usable[0]}]}" ]; then
+  say "halOS will be installed on this disk:"
+  describe "${usable[0]}"
+  for d in "${small[@]}"; do say "(Too small, not used:)"; describe "$d"; done
+  yesno "Erase it and install halOS?" || stop "Stopped at your request."
+  disk="${usable[0]}"
+else
+  say "These disks could hold halOS. Check which one, because the one you pick is erased completely:"
+  for d in "${usable[@]}"; do describe "$d"; done
+  for d in "${small[@]}"; do say "(Too small, not used:)"; describe "$d"; done
+  while :; do
+    ask "Type the name of the disk to ERASE and install on (for example ${usable[0]}), or press Enter to stop:"
+    [ -n "$REPLY" ] || stop "Stopped at your request."
+    if [[ " ${usable[*]} " == *" $REPLY "* ]]; then disk="$REPLY"; break; fi
+    say "'$REPLY' isn't one of the disks above. Type its name exactly, as shown in the first column."
+  done
+fi
+
+if [ -n "$unattended" ]; then
+  hostname="${ans[hostname]:-halos}"
+  luks="${ans[luks_passphrase]:-}"
+  rootpw="${ans[root_password]:-}"
+  admin="${ans[admin_user]:-}"; adminpw="${ans[admin_password]:-}"
+  finish="${ans[finish]:-reboot}"
+  valid_host "$hostname" || stop "The answers' hostname isn't valid."
+  [ -z "$luks" ] || valid_secret "$luks" 8 || stop "The answers' disk passphrase isn't valid."
+  [ -z "$rootpw" ] || valid_secret "$rootpw" 8 || stop "The answers' root password isn't valid."
+  valid_user "$admin" || stop "The answers' admin user name isn't valid."
+  valid_secret "$adminpw" 8 || stop "The answers' admin password isn't valid."
+  case "$finish" in reboot|poweroff) ;; *) stop "finish must be reboot or poweroff." ;; esac
+else
+  say ""
+  while :; do
+    ask "Name of this machine on the network [halos]:" halos
+    hostname="${REPLY,,}"
+    valid_host "$hostname" && break
+    say "Use lower-case letters, digits and hyphens, at most 63, not starting or ending with a hyphen."
+  done
+  say "" "Encrypting the disk protects the models, settings and API key if the machine or disk is" \
+      "taken. It is unlocked with a passphrase at each boot; after the install, sudo halosctl setup" \
+      "can let the TPM unlock it instead."
+  luks=""
+  if yesno "Encrypt the disk (LUKS)?"; then secret "Disk passphrase (at least 8 characters)" 8; luks="$REPLY"; fi
+  say "" "The root account is for the local console only. It can never log in over SSH."
+  rootpw=""
+  if yesno "Enable the root account?"; then secret "Root password (at least 8 characters)" 8; rootpw="$REPLY"; fi
+  say "" "The admin user logs in over SSH and runs sudo."
+  while :; do
+    ask "Admin user name:"
+    admin="$REPLY"
+    valid_user "$admin" && break
+    say "Use lower-case letters, digits, - and _, starting with a letter, and not a system name such as root or halogen."
+  done
+  secret "Password for $admin (at least 8 characters)" 8; adminpw="$REPLY"
+  finish=reboot
+  say "" "Ready to install:"
+  describe "$disk"
+  say "  Machine name: $hostname" \
+      "  Encryption:   $([ -n "$luks" ] && echo "on (LUKS2)" || echo off)" \
+      "  Root:         $([ -n "$rootpw" ] && echo "console login only" || echo locked)" \
+      "  Admin user:   $admin (sudo)"
+  yesno "Erase $disk and install halOS now?" || stop "Stopped at your request."
+fi
+
+# --- The kickstart lines -----------------------------------------------------------------------
+# Single-quoted for the kickstart parser (shlex): a ' inside becomes '"'"'.
+q() { printf "'%s'" "${1//\'/\'\"\'\"\'}"; }
+mib=1024
+umask 077
+{
+  echo "network --hostname=$hostname"
+  if [ -n "$rootpw" ]; then
+    echo "rootpw --plaintext $(q "$rootpw")$([ "${ans[allow_root_ssh]:-}" = yes ] && echo ' --allow-ssh')"
+  else
+    echo "rootpw --lock"
+  fi
+  echo "user --name=$admin --groups=wheel --plaintext --password=$(q "$adminpw")"
+  echo "ignoredisk --only-use=$disk"
+  echo "zerombr"
+  echo "clearpart --all --initlabel --disklabel=gpt --drives=$disk"
+  echo "reqpart --add-boot"
+  if [ -n "$luks" ]; then
+    echo "part pv.halos --fstype=lvmpv --ondisk=$disk --size=1 --grow --encrypted --luks-version=luks2 --passphrase=$(q "$luks")"
+  else
+    echo "part pv.halos --fstype=lvmpv --ondisk=$disk --size=1 --grow"
+  fi
+  echo "volgroup halos pv.halos"
+  # Fixed names (#42), whatever the hostname. The models volume takes the rest of the disk.
+  echo "logvol /                --vgname=halos --name=root    --fstype=xfs --size=$((40 * mib))"
+  echo "logvol /var             --vgname=halos --name=var     --fstype=xfs --size=$((60 * mib))"
+  echo "logvol /var/log         --vgname=halos --name=log     --fstype=xfs --size=$((10 * mib))"
+  echo "logvol /var/log/audit   --vgname=halos --name=audit   --fstype=xfs --size=$((5 * mib))"
+  echo "logvol /home            --vgname=halos --name=home    --fstype=xfs --size=$((50 * mib))"
+  echo "logvol /var/srv/configs --vgname=halos --name=configs --fstype=xfs --size=$((1 * mib))"
+  echo "logvol /var/srv/models  --vgname=halos --name=models  --fstype=xfs --size=1 --grow"
+  echo "$finish"
+} > "$out" || stop "Could not write $out."
+say "" "Installing halOS on $disk. This takes a few minutes; the machine then $([ "$finish" = reboot ] && echo restarts || echo powers off)."
+exit 0

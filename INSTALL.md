@@ -32,7 +32,7 @@ its memory either way.
 
 - A dedicated AMD Strix Halo machine with 128 GB of memory. The GTT settings assume 128 GB.
 - A USB drive of at least 4 GB. Writing the ISO erases it.
-- A disk with at least 256 GB. The models take about 125 GB.
+- An internal disk of 480 GB or more (a 500 or 512 GB drive is fine). The models take about 125 GB.
 - Internet access on first boot, for the Halogen container and models.
 - Another computer to download the ISO and write the USB drive.
 
@@ -115,20 +115,54 @@ sudo dd if=halos-flash-v0.19.0-alpha.1-npu.iso of=/dev/sdX bs=4M status=progress
 
 ## 5. Run the installer
 
-1. Boot from the USB drive and choose **Install halOS**.
-2. Pick your language.
-3. Under **Installation Destination**, choose the disk and keep **Automatic** storage. It
-   creates LVM volumes with XFS for `/`, `/var`, `/var/log`, `/var/log/audit`, `/var/home`,
-   `/var/srv/configs` and `/var/srv/models`, which takes the rest of the disk. **Custom** lets
-   you change this, but keep at least 150 GiB for `/var/srv/models`, and about 110 GB more for
-   each [Flash checkpoint of your own](#your-own-flash-checkpoint).
-4. Tick **Encrypt my data** if you want LUKS, and set a passphrase.
-5. Create your administrator account, and make sure it has admin rights.
-6. Start the install. It copies the OS from the ISO, so it needs no network here.
-7. Reboot and remove the USB drive.
+Boot from the USB drive. The first menu entry, **Install halOS**, is the guided install: a few
+questions on a text screen, then it installs by itself. Nothing is erased until you have
+answered them all and said yes at the end.
 
-The installer's graphical environment exists only on the USB drive. The installed system
-starts at a text login, and you don't need to create another account.
+1. **The disk.** It lists the machine's internal disks. USB drives, including the installer,
+   are never offered, and disks under 480 GB are listed as too small (the models alone take
+   about 130 GB).
+   - One empty disk: it shows it and asks **"Erase it and install halOS?"**
+   - More than one disk, or a disk with anything on it (partitions, an old install, LUKS): it
+     shows each disk's name, size, model and what's on it, and you **type the name** of the one
+     to erase, for example `nvme0n1`. Pressing Enter instead stops without changing anything.
+2. **Name of this machine** on the network. Enter keeps `halos`.
+3. **Encrypt the disk (LUKS)?** If yes, type the passphrase twice. You type it at every boot,
+   until you let the TPM unlock it in [first-boot setup](#6-first-boot-setup-then-let-the-first-boot-finish).
+   Use letters, digits and the symbols of a US keyboard: that's the layout the boot prompt has.
+4. **Enable the root account?** If yes, type its password twice. Root can only log in at the
+   machine's own screen, never over SSH. Most people answer no and use `sudo`.
+5. **Admin user:** a name and a password. This is the account you log in with, locally and over
+   SSH, and it can use `sudo`.
+6. It shows a summary and asks once more: **"Erase nvme0n1 and install halOS now?"**
+
+The install copies the OS from the USB drive, so it needs no network, and takes a few minutes.
+The machine then restarts: remove the USB drive.
+
+The disk is laid out the same way on every machine, with LVM and XFS. The volume group is
+always `halos`, whatever the machine's name:
+
+| Mount | Volume | Size |
+|---|---|---|
+| `/` | `halos-root` | 40 GiB |
+| `/var` | `halos-var` | 60 GiB |
+| `/var/log` | `halos-log` | 10 GiB |
+| `/var/log/audit` | `halos-audit` | 5 GiB |
+| `/var/home` | `halos-home` | 50 GiB |
+| `/var/srv/configs` | `halos-configs` | 1 GiB |
+| `/var/srv/models` | `halos-models` | the rest: about 300 GiB on a 512 GB disk, 1,690 GiB on a 2 TB one |
+
+Each [Flash checkpoint of your own](#your-own-flash-checkpoint) takes about 110 GB more of the
+models volume.
+
+**Custom partitioning.** The second menu entry, **Install halOS (custom partitioning)**, opens
+the full graphical installer, for unusual setups. Under **Installation Destination**, pick the
+disk; **Automatic** creates the volumes above with sizes that scale with the disk (its volume
+group is named after the machine, such as `halos_freyja`), and **Custom** lets you change them.
+Keep at least 150 GiB for `/var/srv/models`. Tick **Encrypt my data** for LUKS, and create an
+admin account with admin rights.
+
+The installed system starts at a text login, and you don't need to create another account.
 
 ## 6. First-boot setup, then let the first boot finish
 

@@ -70,9 +70,9 @@ image-based Fedora Server edition, so this adds only what the appliance needs.
 
 ## Install
 
-See **[INSTALL.md](INSTALL.md)**. In short: write the ISO for your edition to USB, boot it, pick
-a disk and optional LUKS in the installer, create your admin account, and let the first boot
-download the models.
+See **[INSTALL.md](INSTALL.md)**. In short: write the ISO for your edition to USB, boot it, and
+answer the guided installer's few questions (the disk, LUKS or not, root or not, your admin
+account). Then run `sudo halosctl setup` and let the first boot download the models.
 
 ## What lives where
 

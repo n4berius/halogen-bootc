@@ -2,6 +2,11 @@ label: "halos-flash"
 grub2:
   timeout: 5
   entries:
+    # Guided (#42): picks the disk and asks only encryption, root and the admin user.
+    # inst.ks reads the kickstart from the boot image, where the Containerfile puts it.
     - name: "Install halOS (@EDITION@)"
+      linux: ${kernelpath} ${root} inst.ks=file:/halos-guided.ks inst.text console=ttyS0 console=tty0
+      initrd: ${initrdpath}
+    - name: "Install halOS (@EDITION@, custom partitioning)"
       linux: ${kernelpath} ${root} inst.graphical console=ttyS0 console=tty0
       initrd: ${initrdpath}
