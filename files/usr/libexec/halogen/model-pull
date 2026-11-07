@@ -91,13 +91,15 @@ if [ "$rc" != 0 ]; then
 fi
 
 args=(-v "$dir:/models/$rel:ro")
+# The probe reads an untrusted config.json, so its words reach your screen without control codes.
 info="$(NET=none in_image /usr/local/bin/halogen-npu probe "/models/$rel" 2>&1)" || {
-  printf '%s\n' "$info" >&2
+  printf '%s\n' "$info" | tr -cd '[:print:]\n' >&2
   echo "Halogen can't run this checkpoint on the NPU (above). Remove it with: sudo halogenctl model remove $name" >&2
   [ "${dir#"$models"/.pull/}" = "$dir" ] || { mkdir -p "$models/custom" && mv "$dir" "$models/custom/$name"; }
   exit 1
 }
 base="$(printf '%s\n' "$info" | tr ' ' '\n' | sed -n 's/^base=//p' | head -n 1)"
+[[ "$base" =~ ^[A-Za-z0-9._-]+$ ]] || base=""
 case "$base" in
   lfm*|LFM*) kind=LFM ;;
   d1*|decider*) kind=decider ;;

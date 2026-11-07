@@ -56,6 +56,10 @@ for opt in --revision --as; do
   grep -qF -- "$opt needs a value" "$work/out" || { cat "$work/out" >&2; echo "$opt with no value hung or said nothing" >&2; exit 1; }
 done
 ok "--revision or --as with no value stops with a message"
+# The probe's words reach the screen without control codes, and only a plain model name is used.
+FAKE_BASE="$(printf 'lfm3\033[2J')" "$pull" LiquidAI/Odd --as odd > "$work/out" 2>&1 || true
+if grep -q "$(printf '\033')" "$work/out"; then echo "a control code from the probe reached the screen" >&2; exit 1; fi
+ok "the probe's output reaches the screen without control codes"
 
 FAKE_BASE=d1-2b "$pull" LiquidAI/d1-2B --as my-d1 --revision abc > "$work/out" 2>&1
 [ -d "$work/models/decider/my-d1" ] && grep -qx 'path=/models/decider/my-d1' "$work/out"

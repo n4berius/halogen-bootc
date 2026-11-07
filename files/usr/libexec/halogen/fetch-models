@@ -147,7 +147,7 @@ for id in ${npu_models//,/ }; do case "$id" in /*) need_probe=1 ;; esac; done
 if [ -n "$need_probe" ]; then
   own_bases="$(podman run --rm --pull=never --read-only --tmpfs /tmp --network=none \
     --cap-drop=all --security-opt no-new-privileges --entrypoint bash \
-    -e HF_HOME=/tmp/hf -e HF_HUB_OFFLINE=1 -e FETCH_MODE=probe -e "NPU_MODELS=$npu_models" \
+    -e HOME=/tmp -e HF_HOME=/tmp/hf -e HF_HUB_OFFLINE=1 -e FETCH_MODE=probe -e "NPU_MODELS=$npu_models" \
     -v "$models:/models:ro" -v "$helper:/fetch.sh:ro" "$HALOGEN_IMAGE" /fetch.sh)"
   case "$?" in
     0) ;;
