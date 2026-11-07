@@ -153,8 +153,9 @@ name, but allows saying halOS runs Halogen.
 - Anaconda copies the installer's `console=` boot arguments to the installed system, so every
   install from before the serial-getty fix has `console=ttyS0 console=tty0`, and systemd's getty
   generator starts `serial-getty@ttyS0`. On freyja ttyS0 exists but has no working UART, and agetty
-  respawned every 10 s with an EIO. `serial-getty@.service.d/10-halos.conf` adds `ExecCondition=stty
-  -F /dev/%I` (a skipped condition isn't restarted), and only the VM test's boot entry passes
+  respawned every 10 s with an EIO. `serial-getty@.service.d/10-halos.conf` adds an `ExecCondition` running
+  `stty -F /dev/%I` with its output thrown away (a skipped condition isn't restarted; systemd gives
+  the condition the tty, so stty's settings line would otherwise print before every login prompt), and only the VM test's boot entry passes
   `console=ttyS0`. The VM test checks ttyS0's getty is active and ttyS1's (no UART) is skipped.
 - `halogen-enroll-tpm` uses PCR 7 and `--wipe-slot=tpm2`, so re-enrolling replaces the old
   binding. Enrolling twice on the same boot is a no-op ("already enrolled").
