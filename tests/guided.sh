@@ -39,6 +39,8 @@ run() { # stdin: what is typed
   rm -f "$ks"; : > "$work/log"
   if "$plan" "$ks" > "$work/out" 2>&1; then rc=0; else rc=$?; fi
 }
+# A stop: exit 1 and no kickstart lines written.
+stopped() { [ "$rc" = 1 ] && [ ! -e "$ks" ]; }
 typed() { printf '%s\n' "$@" > "$work/in"; run < "$work/in"; }
 # The kickstart as Anaconda reads it: the guided file with these lines in place of %include.
 parse() {
@@ -108,7 +110,7 @@ ok "bad answers and existing account names are asked again; root on, encryption 
 echo crypto_LUKS > "$work/fs.nvme0n1"; echo part > "$work/parts.nvme0n1"
 disks "$(disk nvme0n1 $TB nvme 'WD_BLACK SN850X')" "$(disk sdb $STICK usb 'Cruzer')"
 typed yes
-[ "$rc" = 1 ] && [ ! -e "$ks" ] || { echo "a disk with data was taken on a yes" >&2; exit 1; }
+stopped || { echo "a disk with data was taken on a yes" >&2; exit 1; }
 expect "$work/out" '(has data: crypto_LUKS)'
 typed nvme1n1 nvme0n1 '' no no nab pw12345678 pw12345678 yes
 [ "$rc" = 0 ] || { cat "$work/out" >&2; exit 1; }
@@ -121,7 +123,7 @@ expect "$ks" 'ignoredisk --only-use=nvme1n1'
 # An earlier install's halos volume group on the other disk stops it; on the chosen disk it doesn't.
 echo '  /dev/nvme1n1p3 halos' > "$work/pvs"
 typed nvme0n1 '' no no nab pw12345678 pw12345678 yes ''
-[ "$rc" = 1 ] && [ ! -e "$ks" ] || { echo "a second halos volume group was allowed" >&2; exit 1; }
+stopped || { echo "a second halos volume group was allowed" >&2; exit 1; }
 expect "$work/out" 'Disk nvme1n1 already has a halOS volume group'
 typed nvme1n1 '' no no nab pw12345678 pw12345678 yes
 [ "$rc" = 0 ] || { cat "$work/out" >&2; echo "reinstalling over halos was refused" >&2; exit 1; }
@@ -132,14 +134,14 @@ ok "a disk with data, or a choice of two, needs its name typed; one halos volume
 # written, and the machine powers off.
 disks "$(disk nvme0n1 $TB nvme A)"
 typed yes '' no no nab pw12345678 pw12345678 no ''
-[ "$rc" = 1 ] && [ ! -e "$ks" ] || { echo "the last no did not stop" >&2; exit 1; }
+stopped || { echo "the last no did not stop" >&2; exit 1; }
 expect "$work/log" 'systemctl poweroff'
 disks "$(disk nvme0n1 $TB nvme A)" "$(disk nvme1n1 $TB nvme B)"
 typed '' ''
-[ "$rc" = 1 ] && [ ! -e "$ks" ] || { echo "an empty disk name did not stop" >&2; exit 1; }
+stopped || { echo "an empty disk name did not stop" >&2; exit 1; }
 disks "$(disk sda $SMALL sata 'Old SSD')"
 typed ''
-[ "$rc" = 1 ] && [ ! -e "$ks" ] || { echo "a small disk was used" >&2; exit 1; }
+stopped || { echo "a small disk was used" >&2; exit 1; }
 expect "$work/out" 'needs an internal disk of at least 480GB'
 ok "a no, an empty name or a small disk stops with nothing written"
 
@@ -148,7 +150,7 @@ export FAKE_ANSWERS_DEV=/dev/vdb
 disks "$(disk vda $TB '' QEMU)" "$(disk vdb 376832 '' QEMU)"
 echo disk=vda > "$work/answers"
 typed no ''
-[ "$rc" = 1 ] && [ ! -e "$ks" ] || { echo "the answers volume was used without the unattended entry" >&2; exit 1; }
+stopped || { echo "the answers volume was used without the unattended entry" >&2; exit 1; }
 expect "$work/out" 'Only the unattended menu'
 expect "$work/out" 'Erase it and install halOS?'
 if grep -q '^mount' "$work/log"; then echo "the answers volume was mounted" >&2; exit 1; fi
@@ -175,7 +177,7 @@ expect "$ks" ' --allow-ssh'
 parse "{'luks': ['halogentest'], 'root': '\$(touch \$FAKE/pwned)', 'disk': ['vda']}"
 echo xfs > "$work/fs.vda"
 run < /dev/null
-[ "$rc" = 1 ] && [ ! -e "$ks" ] || { echo "a disk with data was erased without confirm" >&2; exit 1; }
+stopped || { echo "a disk with data was erased without confirm" >&2; exit 1; }
 echo confirm=vda >> "$work/answers"
 run < /dev/null
 [ "$rc" = 0 ] || { cat "$work/out" >&2; exit 1; }
@@ -183,12 +185,12 @@ run < /dev/null
 disks "$(disk vda $TB '' QEMU)" "$(disk vdc $TB '' QEMU)" "$(disk vdb 376832 '' QEMU)"
 sed -i 's/^disk=vda/disk=vda vdc/' "$work/answers"
 run < /dev/null
-[ "$rc" = 1 ] && [ ! -e "$ks" ] || { echo "two disk names were accepted" >&2; exit 1; }
+stopped || { echo "two disk names were accepted" >&2; exit 1; }
 sed -i 's/^disk=vda vdc/disk=vdb/' "$work/answers"
 run < /dev/null
 [ "$rc" = 1 ] || { echo "the answers volume was accepted as the disk" >&2; exit 1; }
 echo 'evil=1' >> "$work/answers"
 run < /dev/null
-[ "$rc" = 1 ] && [ ! -e "$ks" ] || { echo "an unknown answer was accepted" >&2; exit 1; }
+stopped || { echo "an unknown answer was accepted" >&2; exit 1; }
 if grep -q 'systemctl poweroff' "$work/log"; then echo "unattended stop powered off" >&2; exit 1; fi
 ok "unattended answers are read as data, and a disk with data needs confirm"

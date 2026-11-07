@@ -120,7 +120,7 @@ declare -A size=() model=() content=()
 while IFS=$'\x1f' read -r name type tran rm ro bytes mdl; do
   [ "$type" = disk ] || continue
   case "$name" in zram*|ram*|loop*|sr*|fd*) continue ;; esac
-  [ "$tran" != usb ] && [ "$rm" != true ] && [ "$rm" != 1 ] && [ "$ro" != true ] && [ "$ro" != 1 ] || continue
+  case "$tran:$rm:$ro" in usb:*|*:true:*|*:1:*|*:true|*:1) continue ;; esac
   case "$skip_disks" in *" $name "*) continue ;; esac
   size[$name]="$bytes"; model[$name]="${mdl:-unknown model}"
   # What is on it: partitions, filesystems, LUKS, LVM, or a partition table on its own.
