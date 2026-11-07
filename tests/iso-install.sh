@@ -50,7 +50,7 @@ timeout 1500 bash -c "$(declare -f vm); code=$code out=$out; vm -cdrom '$iso' -b
   -drive file=$out/answers.iso,format=raw,if=virtio,readonly=on -serial file:$out/install.log" &
 install=$!
 # Answers are used only from the unattended menu entry, which the test picks like a person would.
-python3 "$here/grub-pick.py" "$out/monitor.sock" "$out" || { kill "$install"; exit 1; }
+python3 "$here/grub-pick.py" "$out/monitor.sock" "$out/install.log" || { kill "$install"; exit 1; }
 wait "$install" || { echo "the install did not finish (see install.log)" >&2; exit 1; }
 echo "install finished"
 
