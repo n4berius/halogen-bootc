@@ -130,7 +130,8 @@ answered them all and said yes at the end.
 2. **Name of this machine** on the network. Enter keeps `halos`.
 3. **Encrypt the disk (LUKS)?** If yes, type the passphrase twice. You type it at every boot,
    until you let the TPM unlock it in [first-boot setup](#6-first-boot-setup-then-let-the-first-boot-finish).
-   Encryption protects a disk taken out of the machine; see
+   With the passphrase, encryption protects the machine and its disk while it is switched off.
+   With TPM unlock, only a disk taken out of the machine; see
    [what TPM unlock protects](#what-tpm-unlock-protects-and-what-it-doesnt).
    Use letters, digits and the symbols of a US keyboard: that's the layout the boot prompt has.
 4. **Enable the root account?** If yes, type its password twice. Root can only log in at the
@@ -439,8 +440,9 @@ boot instead, both are protected, at the cost of typing it.
 
 If the machine itself could be taken or tampered with, make those two ways in harder:
 
-1. **In the BIOS:** set an administrator (setup) password, and turn off booting from USB. To
-   reinstall later, enter the password and turn USB boot back on.
+1. **In the BIOS:** set an administrator (setup) password, and allow booting only from the
+   internal disk: turn off USB boot and network (PXE) boot, and check that an external drive on
+   a USB4 port can't boot either. To reinstall later, enter the password and turn USB boot back on.
 2. **A boot menu password,** so the kernel line can't be edited:
 
    ```bash
