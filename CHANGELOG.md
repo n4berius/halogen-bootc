@@ -10,6 +10,10 @@ promoted.
 
 ## Unreleased
 
+- Restarting Halogen yourself (`sudo halogenctl restart`, `flash use`, or after a settings
+  change) always works now. A few restarts in a row used to hit Halogen's crash-loop guard ("start
+  of the service was attempted too often"), which only automatic restarts should count towards.
+  (#70)
 - No more serial login prompt restarting every 10 seconds on machines whose first serial port
   doesn't work (freyja logged "failed to get terminal attributes" from boot on). A serial login
   prompt now starts only on a port that answers, and new installs no longer get a serial
