@@ -10,6 +10,18 @@ promoted.
 
 ## Unreleased
 
+- **Security fixes from the full audit:**
+  - Your own NPU checkpoints are checked offline, with no access to your Hugging Face token,
+    before the download step, which no longer reads them itself.
+  - `model pull`'s download and check see only that checkpoint's folder, the check read-only.
+    `--revision` or `--as` with nothing after it no longer hangs.
+  - `model list` prints no folder name that holds terminal control codes.
+  - The docs no longer say Halogen serves "offline": it never downloads, but its container can
+    reach the network.
+  - The download log no longer claims more than the estimate was downloaded when your own
+    checkpoints are counted in.
+  - The build and release workflows use GitHub's actions pinned to exact commits, so a moved
+    version tag can't change what runs beside the signing key. (#69)
 - No more serial login prompt restarting every 10 seconds on machines whose first serial port
   doesn't work (freyja logged "failed to get terminal attributes" from boot on). A serial login
   prompt now starts only on a port that answers, and new installs no longer get a serial
