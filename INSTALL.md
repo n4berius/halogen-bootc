@@ -434,6 +434,7 @@ hardware yet. If the next boot still asks for the passphrase, report it.
 | `/dev/accel/accel0` is missing | Use the NPU edition, and check the IOMMU and firmware |
 | Fabric clock is not held | `systemctl status halogen-fabric-clock` |
 | Halogen stays down after a config edit | `sudo halogenctl status`, then check the NPU model names |
+| "start of the service was attempted too often" | Halogen started 3 times in 15 minutes, its guard against a crash loop. `sudo halogenctl restart` clears it; on releases before this fix, first run `sudo systemctl --user -M halogen@ reset-failed halogen.service` |
 | Halogen stays down after `flash use` | `sudo halogenctl logs` says why; `sudo halogenctl flash use official` goes back |
 | Start hangs, or GTT stays in use after a crash | Reboot, as Halogen's troubleshooting guide explains |
 

@@ -45,6 +45,9 @@ grep -qx 'HALOGEN_FLASH_CTX=1' "$work/configs/halogen.env" || { echo "other sett
 [ "$(stat -c %a "$work/configs/halogen.env")" = 640 ] || { echo "halogen.env lost its 0640 mode" >&2; exit 1; }
 grep -q 'runuser -u halogen -- sh -c' "$work/log" || { echo "halogen.env was not edited as halogen" >&2; exit 1; }
 grep -q 'systemctl --user --machine=halogen@.host restart halogen.service' "$work/log"
+# A restart you ask for clears the crash-loop limit first, so it always runs.
+grep -A1 'reset-failed halogen.service' "$work/log" | grep -q 'restart halogen.service' \
+  || { cat "$work/log" >&2; echo "the restart didn't clear the start limit first" >&2; exit 1; }
 ok "model pull edits halogen.env as halogen, and a crafted value stays plain text"
 
 printf 'HALOGEN_FLASH_CTX=1\n' > "$work/configs/halogen.env"
