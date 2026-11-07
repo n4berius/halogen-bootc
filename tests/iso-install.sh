@@ -1,32 +1,34 @@
 #!/bin/bash
 # Install the ISO to a blank disk unattended, boot it with Secure Boot on, and report on it.
 # Usage: tests/iso-install.sh path/to.iso os-image-reference output-dir variant
-# The NPU edition installs on LUKS, so both encrypted and plain installs are tested. The VM has
-# an emulated TPM: the LUKS install is bound to it with halogen-enroll-tpm, then rebooted to
-# prove the disk unlocks with no passphrase.
+# It takes the guided installer's unattended boot entry, with its answers on a volume labelled
+# HALOS_ANSWERS instead of typed. The NPU edition installs on LUKS to a 512 GB disk, no-NPU without
+# LUKS to a 2 TB one, so both encrypted and plain installs and both ends of the sizing are tested.
+# The VM has an emulated TPM: the LUKS install is bound to it with halogen-enroll-tpm, then
+# rebooted to prove the disk unlocks with no passphrase.
 set -euo pipefail
-iso="$1"; target="$2"; out="$3"; variant="$4"; mkdir -p "$out/oem"
+iso="$1"; target="$2"; out="$3"; variant="$4"; mkdir -p "$out/answers"
 here="$(cd "$(dirname "$0")" && pwd)"
 code=/usr/share/OVMF/OVMF_CODE_4M.secboot.fd
 cp /usr/share/OVMF/OVMF_VARS_4M.ms.fd "$out/vars.fd"
-qemu-img create -f qcow2 "$out/disk.qcow2" 300G >/dev/null
+# Sizes as sold: 512 GB and 2 TB, in bytes.
+if [ "$variant" = npu ]; then disk_bytes=512110190592; else disk_bytes=2000398934016; fi
+qemu-img create -f qcow2 "$out/disk.qcow2" "$disk_bytes" >/dev/null
 
-# Anaconda reads ks.cfg from a volume labelled OEMDRV. Test-only password, in a throwaway VM.
+# Test-only passwords, in a throwaway VM. Each is different, so a leak can be told apart.
 luks=""
-[ "$variant" != npu ] || luks=" --encrypted --luks-version=luks2 --passphrase=halogentest"
-cat > "$out/oem/ks.cfg" <<S
-text
-lang en_US.UTF-8
-keyboard us
-timezone Etc/UTC --utc
-rootpw --plaintext halogentest --allow-ssh
-zerombr
-clearpart --all --initlabel
-autopart --type=lvm$luks
-bootc --source-imgref containers-storage:$target --target-imgref $target
-poweroff
+[ "$variant" != npu ] || luks=halogentest
+cat > "$out/answers/answers" <<S
+disk=vda
+hostname=halostest
+luks_passphrase=$luks
+root_password=rootsecret
+admin_user=admin
+admin_password=adminsecret
+finish=poweroff
+allow_root_ssh=yes
 S
-genisoimage -quiet -V OEMDRV -o "$out/oem.iso" "$out/oem/ks.cfg"
+genisoimage -quiet -V HALOS_ANSWERS -o "$out/answers.iso" "$out/answers/answers"
 
 vm() {
   # A fresh swtpm per run; its state in $out/tpm lasts across the install and every boot.
@@ -45,7 +47,11 @@ vm() {
 
 echo "=== installing ==="
 timeout 1500 bash -c "$(declare -f vm); code=$code out=$out; vm -cdrom '$iso' -boot d \
-  -drive file=$out/oem.iso,format=raw,if=virtio,readonly=on -serial file:$out/install.log"
+  -drive file=$out/answers.iso,format=raw,if=virtio,readonly=on -serial file:$out/install.log" &
+install=$!
+# Answers are used only from the unattended menu entry, which the test picks like a person would.
+python3 "$here/grub-pick.py" "$out/monitor.sock" "$out/install.log" || { kill "$install"; exit 1; }
+wait "$install" || { echo "the install did not finish (see install.log)" >&2; exit 1; }
 echo "install finished"
 
 echo "=== first boot from disk ==="
@@ -63,8 +69,21 @@ grep -q 'Linger=yes' "$out/report.txt"
 for m in /sysroot /var /var/log /var/log/audit /var/home /var/srv/configs /var/srv/models; do
   grep -qE "^$m " "$out/report.txt" || { echo "no separate volume for $m" >&2; exit 1; }
 done
-# Anaconda names the volume group after the installer's product name (halOS).
-grep -qi 'halos_' "$out/report.txt" || { echo "volume group name is not short" >&2; exit 1; }
+# The guided install's fixed names (#42), whatever the hostname.
+for v in /sysroot:root /var:var /var/log:log /var/log/audit:audit /var/home:home \
+         /var/srv/configs:configs /var/srv/models:models; do
+  grep -qx "${v%%:*} /dev/mapper/halos-${v#*:}" "$out/report.txt" || { echo "${v%%:*} is not on halos-${v#*:}" >&2; exit 1; }
+done
+# The models volume takes the rest: about 308 GiB of a 512 GB disk, 1690 GiB of a 2 TB one.
+models_gib="$(awk '$1 == "models" { printf "%d", $2 }' "$out/report.txt")"
+if [ "$variant" = npu ]; then want=290; else want=1650; fi
+[ "${models_gib:-0}" -ge "$want" ] || { echo "the models volume is ${models_gib:-missing} GiB, expected $want or more" >&2; exit 1; }
+grep -qF "$target" "$out/report.txt" || { echo "the installed system doesn't follow $target" >&2; exit 1; }
+grep -qx halostest "$out/report.txt" || { echo "the hostname was not set" >&2; exit 1; }
+grep -qE '^uid=[0-9]+\(admin\).*\(wheel\)' "$out/report.txt" || { echo "the admin user is missing or not in wheel" >&2; exit 1; }
+# No password or passphrase in a file or the journal on the installed system.
+if grep -q '^PWLEAK ' "$out/report.txt"; then grep '^PWLEAK ' "$out/report.txt" >&2; echo "a password was written to disk" >&2; exit 1; fi
+grep -qx 'PWJOURNAL 0' "$out/report.txt" || { echo "a password is in the journal" >&2; exit 1; }
 if [ -n "$luks" ]; then grep -q 'crypto_LUKS' "$out/report.txt"; fi
 grep -q 'halogen-fetch:' "$out/report.txt"
 # halosctl reads bootc's status and the image's release file on a real install.

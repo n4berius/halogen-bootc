@@ -37,7 +37,7 @@ name, but allows saying halOS runs Halogen.
 |---|---|
 | `versions.env` | Every pinned input: Fedora base, Halogen version, digest and source commit, upstream file hashes, weights repo and revision, ISO builder |
 | `Containerfile` | The OS image. XRT is not in it: Halogen's image carries its own since 0.19.1 |
-| `Containerfile.installer`, `installer/` | The live installer image, Anaconda defaults (storage layout), branding and boot menu |
+| `Containerfile.installer`, `installer/` | The live installer image, Anaconda defaults (storage layout for custom partitioning), branding and boot menu. `installer/guided/`: the guided install's kickstart and `plan-install` (#42) |
 | `files/` | Copied into both editions: systemd units, `halosctl`, `halogenctl`, `halogen-enroll-tpm`, `/usr/libexec/halogen/*` (`flash-checkpoint` and `model-pull` download your own checkpoints) |
 | `variants/npu`, `variants/no-npu` | Per-edition kernel arguments, Quadlet drop-ins, the allowed-options list and default `halogen.env` |
 | `scripts/` | `build.sh`, `build-iso.sh`, `package-iso.sh` (single-file release ISO), `release-info.sh`, `gen-options.py` (options from upstream `FLAGS.md`), `halogen-update.sh` (pins a new Halogen release), `size-report.sh`, `channels.sh` (which channel tags a release moves), `next-tag.sh` (the next release tag), `push-image.sh`, `sign-image.sh` (cosign signing) |
@@ -109,7 +109,9 @@ name, but allows saying halOS runs Halogen.
   official checkpoint is always kept and fetched (owner decision). `ppl` on request and GGUF
   conversion are later steps.
 - `/srv` is `/var/srv` on bootc. The installer makes LVM volumes for `/`, `/var`, `/var/log`,
-  `/var/log/audit`, `/var/home`, `/var/srv/configs` and `/var/srv/models`.
+  `/var/log/audit`, `/var/home`, `/var/srv/configs` and `/var/srv/models`. The guided install
+  names them `halos-root`, `-var`, `-log`, `-audit`, `-home`, `-configs`, `-models` (VG `halos`);
+  older installs keep Anaconda's `<product>_<hostname>` names (freyja: `halogen_freyja`).
 - Updates are manual, since a reboot stops inference. `halosctl` (`files/usr/bin/halosctl`)
   handles the OS: `version`, `switch <channel>`, `upgrade`, `rollback [--to]`, `history`
   (`/var/lib/halos/history`). `halogenctl` handles the engine and models. Exact release tags
@@ -136,7 +138,18 @@ name, but allows saying halOS runs Halogen.
 - The initramfs must be built with `--no-hostonly` and the `crypt systemd-cryptsetup tpm2-tss
   lvm` modules, or LUKS fails at boot on real hardware. The Containerfile checks this.
 - The root volume is mounted at `/sysroot`, not `/`.
-- The Anaconda `.buildstamp` product name becomes the volume group name. Keep it short.
+- The Anaconda `.buildstamp` product name becomes the volume group name of automatic
+  partitioning (custom entry only). Keep it short.
+- Guided install (#42): the default boot entry has `inst.ks=file:/halos-guided.ks`, a path inside
+  the initramfs (`dracut --include` in `Containerfile.installer`). Its `%pre` runs `plan-install`
+  on tty8 (`chvt`; ttys 2 to 6 get Anaconda's root shell from logind), which writes `/tmp/halos-plan.ks` (mode 600) for `%include`: storage
+  (`ignoredisk`, `reqpart --add-boot`, VG `halos`, fixed LV names), users, hostname, reboot.
+  Kickstart values are single-quoted for pykickstart's shlex; `tests/guided.sh` parses them with
+  pykickstart when installed. The VM test answers from a volume labelled `HALOS_ANSWERS` (file
+  `answers`, read as data, never sourced), used only from the third boot entry
+  (`halos.unattended=1`; `tests/grub-pick.py` selects it within grub's 5 s by watching the serial log, where GRUB draws its menu too: OCR was once too slow), so a stick
+  left plugged in never starts a wipe; there `lsblk` reports no transport, so fields are
+  split on `\x1f`, since `read` merges empty tab-separated ones.
 - `halogen-enroll-tpm` uses PCR 7 and `--wipe-slot=tpm2`, so re-enrolling replaces the old
   binding. Enrolling twice on the same boot is a no-op ("already enrolled").
 - In the VM test, `systemd-pcrextend` needs `SYSTEMD_FORCE_MEASURE=1` on non-UKI boots.
@@ -171,16 +184,17 @@ name, but allows saying halOS runs Halogen.
 Open issues are the source of truth, prioritised with the `priority: high/medium/low` labels
 and tracked on the owner's project board. [ROADMAP.md](ROADMAP.md) holds the order and
 [CHANGELOG.md](CHANGELOG.md) what each release changed. When this file was last updated (after
-`v0.19.1-alpha.2`):
+`v0.19.1-alpha.3`):
 
-- Released: `v0.19.1-alpha.2`, to be promoted to `v0.19.1-beta.1` after a few days on freyja. It has
+- Released: `v0.19.1-alpha.3`, to be promoted to `v0.19.1-beta.1` after a few days on freyja. It has
   the security hardening (#51 to #53), the options list (#57), Halogen 0.19.1 with its own XRT
-  (#58, #59) and custom Flash checkpoints (#60). Freyja runs `unsloth-iq4` with `flash use`, at about
+  (#58, #59), custom Flash checkpoints (#60), the login status (#63), `halosctl setup` (#64) and
+  key signing (#65); it is the first release signed with halOS's key. Freyja runs `unsloth-iq4` with `flash use`, at about
   the official model's speed.
 - Before RC, in this order: machines refuse unsigned images (#46 phase 2; needs key-pair signing,
   since containers/image can't match GitHub's keyless URI identity, and the owner makes the key),
-  first-boot setup and "API ready" (#43, done in #63 and halosctl setup), the guided installer with fixed `halos-*` volume names (#42), and a
-  full `security-auditor` pass.
+  first-boot setup and "API ready" (#43, done in #63 and #64), the guided installer with fixed
+  `halos-*` volume names (#42, done; one real install still to do), and a full `security-auditor` pass.
 - Before stable: benchmark command (#15), `flash check` (#56), `halosctl npu on|off` (#40, trimmed
   to that), tab completion (#14). After stable: unlock over SSH (#13), clevis/tang (#44), GGUF in
   `flash pull` (#61).

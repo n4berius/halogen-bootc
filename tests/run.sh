@@ -20,4 +20,5 @@ tests/selftest.sh
 tests/login-status.sh
 tests/halosctl.sh
 tests/setup.sh
+tests/guided.sh
 echo "all checks passed"

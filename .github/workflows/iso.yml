@@ -9,6 +9,7 @@ on:
       - scripts/**
       - variants/**
       - tests/iso-*.sh
+      - tests/guided.sh
       - tests/vm-login.py
       - .github/workflows/iso.yml
   pull_request:
@@ -51,6 +52,13 @@ jobs:
         run: sudo -E scripts/build.sh
       - name: Build ISO
         run: sudo -E scripts/build-iso.sh
+      - name: Check the guided questions in the installer
+        # tests/guided.sh with the installer's own bash, tools and kickstart parser, minutes
+        # before the VM install would find a kickstart the installer can't read.
+        run: |
+          sudo podman run --rm --network=none -v "$PWD:/src:ro" -w /src \
+            "localhost/halos-flash-installer:$HALOGEN_VERSION-$HALOGEN_VARIANT" \
+            env HALOS_REQUIRE_PYKICKSTART=1 tests/guided.sh
       - name: Size report
         # What takes space in the OS image, installer and ISO. Kept as an artifact for trimming.
         run: |

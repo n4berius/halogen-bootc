@@ -1,6 +1,6 @@
 #!/bin/bash
 set -euo pipefail
-scripts=(scripts/*.sh tests/*.sh files/usr/bin/* files/usr/libexec/halogen/*)
+scripts=(scripts/*.sh tests/*.sh files/usr/bin/* files/usr/libexec/halogen/* installer/guided/plan-install)
 for f in "${scripts[@]}"; do
   bash -n "$f"
   [ -x "$f" ] || { echo "$f is not executable" >&2; exit 1; }

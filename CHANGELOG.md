@@ -10,6 +10,14 @@ promoted.
 
 ## Unreleased
 
+- **Guided installer.** The first boot menu entry asks only for the disk, the machine's name,
+  encryption, root and the admin user, on a text screen, then installs by itself. It never
+  offers USB drives, and a disk with data on it, or a choice of disks, needs its name typed. Every
+  machine gets the same volume names (`halos-root`, `halos-models` and so on). The full graphical
+  installer stays as "custom partitioning". (#66)
+
+## v0.19.1-alpha.3 (2026-11-07)
+
 - Images are also signed with halOS's own key, and every image carries its public key at
   `/etc/pki/containers/halos-flash.pub`. A later release makes machines refuse images without
   that signature. (#65)

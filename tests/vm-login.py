@@ -60,8 +60,9 @@ else:
 if mode in ("luks", "luks-stale", "luks-enroll") and not asked:
     sys.exit("the disk was expected to ask for its passphrase, but it did not")
 
+# The guided install's test answers (tests/iso-install.sh): the root password is not the disk's.
 typed("root\n"); time.sleep(3)
-typed("halogentest\n"); time.sleep(5)
+typed("rootsecret\n"); time.sleep(5)
 # The user services start after the fabric clock, which waits about a minute for a GPU
 # that a VM does not have. Give them time before reporting.
 typed("timeout 180 sh -c 'until journalctl -o cat _SYSTEMD_USER_UNIT=halogen-fetch.service | grep -q halogen-fetch; do sleep 5; done'\n")
@@ -76,7 +77,12 @@ typed("{ echo RESULT-START; cat /proc/cmdline; dmesg | grep -i secure; bootctl s
       # Only the NPU edition makes model folders, so on no-NPU this passes without testing much.
       "mkdir -p -m 755 /var/tmp/victim; mv /var/srv/models/custom /var/srv/models/custom.x; ln -s /var/tmp/victim /var/srv/models/custom; "
       "systemctl restart halogen-prepare; ls -ld /var/tmp/victim; rm /var/srv/models/custom; mv /var/srv/models/custom.x /var/srv/models/custom; "
-      "systemctl restart halogen-prepare; echo RESULT-END; } > /dev/ttyS0 2>&1\n")
+      "systemctl restart halogen-prepare; "
+      # The guided install (#42): volume sizes, hostname, admin user, and no password left behind.
+      "lvs --noheadings --units g --nosuffix -o lv_name,lv_size halos; cat /etc/hostname; id admin; "
+      "grep -rIlsE 'halogentest|rootsecret|adminsecret' /etc /var/roothome /var/log /boot | sed 's/.*/PWLEAK &/'; "
+      "echo PWJOURNAL $(journalctl -o cat | grep -cE 'halogentest|rootsecret|adminsecret'); "
+      "echo RESULT-END; } > /dev/ttyS0 2>&1\n")
 
 def wait_serial(marker, seconds):
     deadline = time.time() + seconds
