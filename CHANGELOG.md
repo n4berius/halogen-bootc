@@ -21,7 +21,7 @@ promoted.
   - The download log no longer claims more than the estimate was downloaded when your own
     checkpoints are counted in.
   - The build and release workflows use GitHub's actions pinned to exact commits, so a moved
-    version tag can't change what runs beside the signing key. (#PR)
+    version tag can't change what runs beside the signing key. (#69)
 - No more serial login prompt restarting every 10 seconds on machines whose first serial port
   doesn't work (freyja logged "failed to get terminal attributes" from boot on). A serial login
   prompt now starts only on a port that answers, and new installs no longer get a serial
