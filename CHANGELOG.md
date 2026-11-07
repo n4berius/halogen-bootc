@@ -10,6 +10,10 @@ promoted.
 
 ## Unreleased
 
+- No more serial login prompt restarting every 10 seconds on machines whose first serial port
+  doesn't work (freyja logged "failed to get terminal attributes" from boot on). A serial login
+  prompt now starts only on a port that answers, and new installs no longer get a serial
+  console at all. (#PR)
 - **Guided installer.** The first boot menu entry asks only for the disk, the machine's name,
   encryption, root and the admin user, on a text screen, then installs by itself. It never
   offers USB drives, and a disk with data on it, or a choice of disks, needs its name typed. Every

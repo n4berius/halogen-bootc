@@ -90,3 +90,13 @@ if ! grep -qx 'DropCapability=all' "$q" || ! grep -qx 'NoNewPrivileges=true' "$q
   echo "$q must drop all capabilities and set NoNewPrivileges" >&2; exit 1
 fi
 echo "ok: Halogen's container has no capabilities"
+
+# A serial getty only on a port that answers (freyja's dead ttyS0 respawned agetty every 10 s),
+# and only the VM test's boot entry puts a serial console on the installed system.
+grep -qx 'ExecCondition=/usr/bin/stty -F /dev/%I' files/usr/lib/systemd/system/serial-getty@.service.d/10-halos.conf \
+  || { echo "serial-getty has no port check" >&2; exit 1; }
+if [ "$(grep -c 'console=ttyS0' installer/iso.yaml)" != 1 ] || ! grep 'console=ttyS0' installer/iso.yaml | grep -q 'halos.unattended=1'; then
+  echo "a user-facing boot entry gives installs a serial console" >&2; exit 1
+fi
+echo "ok: serial consoles"
+

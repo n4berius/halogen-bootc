@@ -150,6 +150,12 @@ name, but allows saying halOS runs Halogen.
   (`halos.unattended=1`; `tests/grub-pick.py` selects it within grub's 5 s by watching the serial log, where GRUB draws its menu too: OCR was once too slow), so a stick
   left plugged in never starts a wipe; there `lsblk` reports no transport, so fields are
   split on `\x1f`, since `read` merges empty tab-separated ones.
+- Anaconda copies the installer's `console=` boot arguments to the installed system, so every
+  install from before the serial-getty fix has `console=ttyS0 console=tty0`, and systemd's getty
+  generator starts `serial-getty@ttyS0`. On freyja ttyS0 exists but has no working UART, and agetty
+  respawned every 10 s with an EIO. `serial-getty@.service.d/10-halos.conf` adds `ExecCondition=stty
+  -F /dev/%I` (a skipped condition isn't restarted), and only the VM test's boot entry passes
+  `console=ttyS0`. The VM test checks ttyS0's getty is active and ttyS1's (no UART) is skipped.
 - `halogen-enroll-tpm` uses PCR 7 and `--wipe-slot=tpm2`, so re-enrolling replaces the old
   binding. Enrolling twice on the same boot is a no-op ("already enrolled").
 - In the VM test, `systemd-pcrextend` needs `SYSTEMD_FORCE_MEASURE=1` on non-UKI boots.

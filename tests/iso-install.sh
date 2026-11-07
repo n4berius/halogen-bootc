@@ -84,6 +84,9 @@ grep -qE '^uid=[0-9]+\(admin\).*\(wheel\)' "$out/report.txt" || { echo "the admi
 # No password or passphrase in a file or the journal on the installed system.
 if grep -q '^PWLEAK ' "$out/report.txt"; then grep '^PWLEAK ' "$out/report.txt" >&2; echo "a password was written to disk" >&2; exit 1; fi
 grep -qx 'PWJOURNAL 0' "$out/report.txt" || { echo "a password is in the journal" >&2; exit 1; }
+# A serial login prompt only where the port answers: ttyS0 works in QEMU, ttyS1 has no UART.
+grep -qx 'SERIALGETTY active 0 exec-condition' "$out/report.txt" \
+  || { grep SERIALGETTY "$out/report.txt" >&2; echo "the serial getty check is wrong" >&2; exit 1; }
 if [ -n "$luks" ]; then grep -q 'crypto_LUKS' "$out/report.txt"; fi
 grep -q 'halogen-fetch:' "$out/report.txt"
 # halosctl reads bootc's status and the image's release file on a real install.
