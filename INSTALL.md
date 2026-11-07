@@ -433,8 +433,8 @@ hardware yet. If the next boot still asks for the passphrase, report it.
 With the TPM, the machine unlocks its own disk whenever it boots through the normal, signed
 boot chain. That protects a **disk taken out of the machine**: elsewhere it is unreadable
 without the passphrase. It doesn't protect the **machine taken whole**, or someone with time at
-its keyboard: they could boot the halOS installer USB, whose root shell can ask the same TPM to
-unlock the disk, or edit the boot menu's kernel line to get a shell. With the passphrase at every
+its keyboard: they could boot the halOS installer USB (or another Fedora USB stick), whose root
+shell can ask the same TPM to unlock the disk, or edit the boot menu's kernel line to get a shell. With the passphrase at every
 boot instead, both are protected, at the cost of typing it.
 
 If the machine itself could be taken or tampered with, make those two ways in harder:
@@ -447,11 +447,18 @@ If the machine itself could be taken or tampered with, make those two ways in ha
    sudo grub2-setpassword
    ```
 
-   Choose a password you will keep; it is asked for only when someone edits a boot entry or
-   opens the GRUB command line. Check it once at the machine's own screen: reboot, and the
-   machine should start by itself with no password. At the menu, pressing `e` should ask for
-   it. This hasn't been tested on halOS hardware yet. If booting itself starts asking for the
+   Choose a password you will keep, using only letters, digits and the symbols of a US keyboard:
+   no spaces, backslashes, `*` or `?`, which the command can save differently from what you
+   type. It is asked for only when someone edits a boot entry or opens the GRUB command line.
+   Check it once at the machine's own screen: reboot, and the machine should start by itself
+   with no password. The menu shows only briefly, so press an arrow key as soon as it appears,
+   then `e`: that should ask for the password. This hasn't been tested on halOS hardware yet. If booting itself starts asking for the
    password, remove it with `sudo rm /boot/grub2/user.cfg`.
+
+These make taking the disk's key harder, not impossible: the boot files on the disk aren't
+encrypted, so someone who can open the case can change them and put the disk back. Only typing
+the passphrase at every boot keeps a stolen machine locked, and even that doesn't protect a
+machine someone tampered with before you typed it.
 
 ## If something goes wrong
 
