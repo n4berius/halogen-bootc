@@ -40,7 +40,7 @@ RUN sed -i "s|@EDITION@|${HALOGEN_VARIANT}|g" /usr/lib/image-builder/bootc/iso.y
     sed -i "s|@TARGET_IMAGE@|${TARGET_IMAGE}|g" /usr/share/anaconda/interactive-defaults.ks \
       /usr/share/anaconda/halos-guided.ks && \
     ! grep -q '@TARGET_IMAGE@' /usr/share/anaconda/interactive-defaults.ks /usr/share/anaconda/halos-guided.ks && \
-    for c in chvt jq numfmt wipefs lsblk blkid findmnt pvs getent; do command -v "$c" >/dev/null || exit 1; done
+    for c in chvt jq numfmt wipefs lsblk blkid findmnt pvs getent openssl; do command -v "$c" >/dev/null || exit 1; done
 
 # What lorax normally does so Anaconda can run. Based on image-builder's example.
 RUN echo 'install:x:0:0:root:/root:/usr/libexec/anaconda/run-anaconda' >> /etc/passwd && \

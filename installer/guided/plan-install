@@ -241,17 +241,28 @@ fi
 # --- The kickstart lines -----------------------------------------------------------------------
 # Single-quoted for the kickstart parser (shlex): a ' inside becomes '"'"'.
 q() { printf "'%s'" "${1//\'/\'\"\'\"\'}"; }
+# Passwords go in hashed (SHA-512 crypt): Anaconda copies the kickstart's user and root lines
+# into /root/anaconda-ks.cfg on the installed system, plaintext ones included. The password
+# reaches openssl on stdin, never on its command line.
+hashed() { printf '%s' "$1" | openssl passwd -6 -stdin; }
+roothash=""
+if [ -n "$rootpw" ]; then
+  roothash="$(hashed "$rootpw")"
+  [ -n "$roothash" ] || stop "The root password could not be hashed."
+fi
+adminhash="$(hashed "$adminpw")"
+[ -n "$adminhash" ] || stop "The admin password could not be hashed."
 mib=1024
 umask 077
 {
   echo "network --hostname=$hostname"
   if [ -n "$rootpw" ]; then
-    # -- ends the options, so a password that starts with - is still the password.
-    echo "rootpw --plaintext$([ "${ans[allow_root_ssh]:-}" = yes ] && echo ' --allow-ssh') -- $(q "$rootpw")"
+    # -- ends the options, so the value is never read as one.
+    echo "rootpw --iscrypted$([ "${ans[allow_root_ssh]:-}" = yes ] && echo ' --allow-ssh') -- $(q "$roothash")"
   else
     echo "rootpw --lock"
   fi
-  echo "user --name=$admin --groups=wheel --plaintext --password=$(q "$adminpw")"
+  echo "user --name=$admin --groups=wheel --iscrypted --password=$(q "$adminhash")"
   echo "ignoredisk --only-use=$disk"
   echo "zerombr"
   echo "clearpart --all --initlabel --disklabel=gpt --drives=$disk"

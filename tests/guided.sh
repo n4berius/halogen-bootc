@@ -51,23 +51,36 @@ parse() {
   fi
   sed -e "s|^%include .*|cat $ks|e" "$repo/installer/guided/halos-guided.ks" > "$work/full.ks"
   python3 - "$work/full.ks" "$@" <<'PY'
-import sys
+import subprocess, sys
 from pykickstart.parser import KickstartParser
 from pykickstart.version import makeVersion
 h = makeVersion()
 KickstartParser(h).readKickstart(sys.argv[1])
+# A SHA-512 crypt hash, compared by hashing the expected password with the same salt.
+def plain(h, crypted):
+  if not crypted or not h.startswith("$6$"): return ("NOT HASHED", h)
+  return h
+def matches(h, pw):
+  salt = h.split("$")[2]
+  out = subprocess.run(["openssl", "passwd", "-6", "-salt", salt, "-stdin"], input=pw,
+                       capture_output=True, text=True, check=True).stdout.strip()
+  return out == h
 got = {
   "luks": [p.passphrase for p in h.partition.partitions if p.encrypted],
-  "root": h.rootpw.password if not h.rootpw.lock else None,
+  "root": plain(h.rootpw.password, h.rootpw.isCrypted) if not h.rootpw.lock else None,
   "allow_ssh": h.rootpw.allow_ssh,
-  "admin": [(u.name, u.password, u.groups) for u in h.user.userList],
+  "admin": [(u.name, plain(u.password, u.isCrypted), u.groups) for u in h.user.userList],
   "disk": h.ignoredisk.onlyuse,
   "lvs": sorted((l.name, l.mountpoint, l.grow) for l in h.logvol.lvList),
   "vg": [v.vgname for v in h.volgroup.vgList],
 }
 want = eval(sys.argv[2])
 for k, v in want.items():
-  if got[k] != v: sys.exit(f"pykickstart read {k} = {got[k]!r}, expected {v!r}")
+  g = got[k]
+  if k == "root" and v is not None and isinstance(g, str): g = v if matches(g, v) else g
+  if k == "admin": g = [(n, v[i][1] if i < len(v) and isinstance(p, str) and matches(p, v[i][1]) else p, gr)
+                        for i, (n, p, gr) in enumerate(g)]
+  if g != v: sys.exit(f"pykickstart read {k} = {got[k]!r}, expected {v!r}")
 PY
 }
 TB=2000398934016; SMALL=256060514304; STICK=32017047552
@@ -88,6 +101,8 @@ expect "$ks" 'volgroup halos pv.halos'
 expect "$ks" 'reboot'
 [ "$(stat -c %a "$ks")" = 600 ] || { echo "the kickstart lines are readable by others" >&2; exit 1; }
 if grep -q "secret\|hunter2" "$work/out"; then echo "a password was shown" >&2; exit 1; fi
+# Only hashes of the passwords: Anaconda copies these lines to the installed system.
+if grep -q hunter2 "$ks"; then echo "the admin password is in the kickstart unhashed" >&2; exit 1; fi
 parse "{'luks': [\"it's a secret\"], 'root': None, 'admin': [('nab', 'hunter2hunter2', ['wheel'])], 'disk': ['nvme0n1'],
   'vg': ['halos'], 'lvs': [('audit', '/var/log/audit', False), ('configs', '/var/srv/configs', False),
   ('home', '/home', False), ('log', '/var/log', False), ('models', '/var/srv/models', True),
