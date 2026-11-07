@@ -17,9 +17,11 @@ if blkid -L HALOS_ANSWERS >/dev/null 2>&1; then
   /usr/libexec/halos/plan-install /tmp/halos-plan.ks < /dev/null > "$out" 2>&1
   exit
 fi
-# The questions get console 6 to themselves, away from the installer's own output.
-chvt 6 || true
-/usr/libexec/halos/plan-install /tmp/halos-plan.ks < /dev/tty6 > /dev/tty6 2>&1
+# The questions get console 8 to themselves, away from the installer's own output. Not 2 to 6:
+# switching to those makes logind start Anaconda's root shell there (autovt@, NAutoVTs=6), which
+# would read the same keystrokes.
+chvt 8 || true
+/usr/libexec/halos/plan-install /tmp/halos-plan.ks < /dev/tty8 > /dev/tty8 2>&1
 rc=$?
 chvt 1 || true
 exit $rc

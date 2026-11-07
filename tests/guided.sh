@@ -1,6 +1,7 @@
 #!/bin/bash
 # The guided installer's questions and disk choice, against fake disk tools. Each run's kickstart
-# lines are also parsed with pykickstart, the installer's own parser, when it is installed.
+# lines are also parsed with pykickstart, the installer's own parser, when it is installed. The
+# ISO workflow runs this again inside the installer image, with its own tools and parser.
 # shellcheck disable=SC2016 # The fake commands expand their variables when they run.
 set -euo pipefail
 repo="$(cd "$(dirname "$0")/.." && pwd)"
@@ -39,7 +40,11 @@ run() { # stdin: what is typed
 typed() { printf '%s\n' "$@" > "$work/in"; run < "$work/in"; }
 # The kickstart as Anaconda reads it: the guided file with these lines in place of %include.
 parse() {
-  python3 -c 'import pykickstart' 2>/dev/null || return 0
+  if ! python3 -c 'import pykickstart' 2>/dev/null; then
+    # The ISO workflow runs this inside the installer image, where it must be there.
+    [ -z "${HALOS_REQUIRE_PYKICKSTART:-}" ] || { echo "pykickstart is missing" >&2; exit 1; }
+    return 0
+  fi
   sed -e "s|^%include .*|cat $ks|e" "$repo/installer/guided/halos-guided.ks" > "$work/full.ks"
   python3 - "$work/full.ks" "$@" <<'PY'
 import sys
