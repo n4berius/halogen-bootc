@@ -156,7 +156,8 @@ name, but allows saying halOS runs Halogen.
   respawned every 10 s with an EIO. `serial-getty@.service.d/10-halos.conf` adds an `ExecCondition` running
   `stty -F /dev/%I` with its output thrown away (a skipped condition isn't restarted; systemd gives
   the condition the tty, so stty's settings line would otherwise print before every login prompt), and only the VM test's boot entry passes
-  `console=ttyS0`. The VM test checks ttyS0's getty is active and ttyS1's (no UART) is skipped.
+  `console=ttyS0`. The VM test checks ttyS0's getty is active with the check loaded. QEMU's ttyS1 does not fail
+  like freyja's ttyS0 (the getty ran there), so the skip itself can only be checked on freyja.
 - `halogen-enroll-tpm` uses PCR 7 and `--wipe-slot=tpm2`, so re-enrolling replaces the old
   binding. Enrolling twice on the same boot is a no-op ("already enrolled").
 - In the VM test, `systemd-pcrextend` needs `SYSTEMD_FORCE_MEASURE=1` on non-UKI boots.
